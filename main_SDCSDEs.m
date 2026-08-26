@@ -120,53 +120,53 @@ for p=1:length(mBB)
     if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
       solRefFinestAll = 0;
       fprintf(1, '\n problem: %s \t no ref sol required' , d);
-    elseif strcmp(d, 'TP3')      
-      allSolRef = cell(1,length(steps));
-      for n=1:length(steps)
-        allSolRef{n} = zeros(order, round((t_end-t_begin)/steps(n))+1, realIter);
-      end
-      fprintf(1, '\n problem: %s \t ref sol will be computed on current sample path, not on finest' , d);
-      
-%       % check bridge ODE with Matlab solver
-      for l=1:realIter
-        stepsFinest = t_end/NNfinest;
-        for k=1:order
-          etaMat = eta{k}(1,:);%eta{k}(l,:); %always use one to have all processes go through the same nodes
-          etaFin(k,:) = [0 etaMat];
-          etaFinest(k,:) = etaFin(k,1:end)- [0, etaFin(k,1:end-1)];
-          xiFinest(k,:,:) = xi{k}(l,:,:);
-        end
-        etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
-        if l==1
-          fprintf(1, '\n etaFinest= %d' , etaFinest(1,end));
-        end
-        k=1;
-        bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
-        for k=2:NNfinest
-           bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
-        end
-        bbM(:,:) = [zeros(order,1) bM(:,:)];
-        y0 = initial;
-        tsolAppro = t_begin;
-        solAppro = initial;
-        for k=1:NNfinest
-          [tsol, solA] = ode45(@(s,x)SBB_ODE_TP3(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
-          y0 = solA(end,:);
-          tsolAppro = [tsolAppro tsol(end)'];
-           solAppro = [solAppro solA(end)'];
-        end
-        solRefFinestAll(:,:,l) = solAppro;
-        
-%         if mod(l,100000) == 0
-%           figure(10);
-%           hold on ;
-%           plot(1:size(etaFinest,2), squeeze(etaFinest(1,:)));
+%    elseif strcmp(d, 'TP3')      
+%      allSolRef = cell(1,length(steps));
+%      for n=1:length(steps)
+%        allSolRef{n} = zeros(order, round((t_end-t_begin)/steps(n))+1, realIter);
+%      end
+%      fprintf(1, '\n problem: %s \t ref sol will be computed on current sample path, not on finest' , d);
+%      
+% %       % check bridge ODE with Matlab solver
+%       for l=1:realIter
+%         stepsFinest = t_end/NNfinest;
+%         for k=1:order
+%           etaMat = eta{k}(1,:);%eta{k}(l,:); %always use one to have all processes go through the same nodes
+%           etaFin(k,:) = [0 etaMat];
+%           etaFinest(k,:) = etaFin(k,1:end)- [0, etaFin(k,1:end-1)];
+%           xiFinest(k,:,:) = xi{k}(l,:,:);
 %         end
-      end
-      sv = squeeze(solRefFinestAll(1,end,:));
-      mean(sv)
-      var(sv)
-      return;
+%         etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
+%         if l==1
+%           fprintf(1, '\n etaFinest= %d' , etaFinest(1,end));
+%         end
+%         k=1;
+%         bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
+%         for k=2:NNfinest
+%            bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
+%         end
+%         bbM(:,:) = [zeros(order,1) bM(:,:)];
+%         y0 = initial;
+%         tsolAppro = t_begin;
+%         solAppro = initial;
+%         for k=1:NNfinest
+%           [tsol, solA] = ode45(@(s,x)SBB_ODE_TP3(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
+%           y0 = solA(end,:);
+%           tsolAppro = [tsolAppro tsol(end)'];
+%            solAppro = [solAppro solA(end)'];
+%         end
+%         solRefFinestAll(:,:,l) = solAppro;
+% 
+% %         if mod(l,100000) == 0
+% %           figure(10);
+% %           hold on ;
+% %           plot(1:size(etaFinest,2), squeeze(etaFinest(1,:)));
+% %         end
+%       end
+%       sv = squeeze(solRefFinestAll(1,end,:));
+%       mean(sv)
+%       var(sv)
+%       return;
     else
     
     %sol of the smooth Brownian Bridge ODE
@@ -285,10 +285,10 @@ for p=1:length(mBB)
         eocT = zeros(size(errorT));
         eocL2 = zeros(size(errorL2));
         for i=1:size(errStr,2)-1
-          eocStr(i+1) = (log(errStr(:,i+1))-log(errStr(:,i))) / (log(steps(i+1))-log(steps(i)));
-          eocWeak(i+1) = (log(errW(:,i+1))-log(errW(:,i))) / (log(steps(i+1))-log(steps(i)));
-          eocT(i+1) = (log(errorT(:,i+1))-log(errorT(:,i))) / (log(steps(i+1))-log(steps(i)));
-          eocL2(i+1) = (log(errorL2(:,i+1))-log(errorL2(:,i))) / (log(steps(i+1))-log(steps(i)));
+          eocStr(:,i+1) = (log(errStr(:,i+1))-log(errStr(:,i))) / (log(steps(i+1))-log(steps(i)));
+          eocWeak(:,i+1) = (log(errW(:,i+1))-log(errW(:,i))) / (log(steps(i+1))-log(steps(i)));
+          eocT(:,i+1) = (log(errorT(:,i+1))-log(errorT(:,i))) / (log(steps(i+1))-log(steps(i)));
+          eocL2(:,i+1) = (log(errorL2(:,i+1))-log(errorL2(:,i))) / (log(steps(i+1))-log(steps(i)));
         end
         
         fprintf( '\n convergence order: \t col points: %d \t max iter: %d \n', col_points, max_iter);
@@ -296,7 +296,7 @@ for p=1:length(mBB)
         fprintf( '\n step size \t strong err \t eoc \t weak err \t eoc \t L2 err \t eoc \t T err \t eoc\n');
         fprintf( '----------------------------------------------------------------------------------------------------------------------------------\n');
         for i=1:length(steps)
-          fprintf( '%d \t %d \t %d \t %d \t %d \t %d \t %d \t %d \t %d  \n', steps(i), errStr(1,i), eocStr(i), errW(1,i), eocWeak(i), errorL2(1,i), eocL2(i), errorT(1,i), eocT(i));
+          fprintf( '%1.6e \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f  \n', steps(i), errStr(1,i), eocStr(i), errW(1,i), eocWeak(i), errorL2(1,i), eocL2(i), errorT(1,i), eocT(i));
         end
         
         fprintf( '\n compTime %f\n' , compTime);

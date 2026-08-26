@@ -112,14 +112,14 @@ if strcmp(sde_solver,'SDC_BB')
   %          end
             
             %adding values of each realization realIter
-            %preliminary work for determining the expected solution
+            %preperatory work for determining the expected solution
             sumSol = sumSol + solSDC;
             if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
               sumSolT2 = sumSolT2 + solSDC(:,end).*solSDC(:,end);
             end
             sumSolRef = sumSolRef + solRef;
             
-            %preliminary work for computation of different error definitions
+            %preparatory work for computation of different error definitions
             diffSol = diffSol + abs(solSDC-solRef);
             diff = diff + (solSDC(:,end)-solRef(:,end)).^2;
             solsSDC(l) = solSDC(1,end);
@@ -130,11 +130,11 @@ if strcmp(sde_solver,'SDC_BB')
         sol= sumSol/realIter;
         solExactRef = sumSolRef/realIter;
         
-        if strcmp(d, 'TP3') % compute reference solution new with sample paths
-          nstepsRef = 1000;
-          refdt = step_size/nstepsRef;
-          solsRef = zeros(realIter,1);
-          reft = refdt:refdt:step_size;
+%         if strcmp(d, 'TP3') % compute reference solution new with sample paths
+%           nstepsRef = 1000;
+%           refdt = step_size/nstepsRef;
+%           solsRef = zeros(realIter,1);
+%           reft = refdt:refdt:step_size;
 %           for l=1:realIter
 %             refWt = cumsum(randn(1,nstepsRef)).*sqrt(refdt); 
 %             %delta=refWt(nstepsRef-1)-step_size/2; %?
@@ -149,7 +149,7 @@ if strcmp(sde_solver,'SDC_BB')
 % %             hold on;
 % %             plot(reft,refXt);
 %           end
-        end
+%         end
         
 %         figure(3);
 %         hist(solsRef,20);
