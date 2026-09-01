@@ -100,6 +100,8 @@ for p=1:length(mBB)
         etaFinest = sqrt(1/stepsFinest)*etaFinest;
         
         if SBB == true
+        bM = zeros(order, NNfinest);
+        bbM = zeros(order, NNfinest+1);
         k=1;
         bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
         for k=2:NNfinest

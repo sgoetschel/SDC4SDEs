@@ -32,6 +32,8 @@ NNCurrent = intervals; %(t_end-t_begin) / step_size;
 compTime = 0;
         
 xi_l = zeros(order, nBridgeTerms-1, intervals);
+etaCurrSteps = zeros(order, intervals+1);
+eta0 = zeros(order, intervals+1);
 
 solsSDC = zeros(order, realIter);
 

@@ -1,6 +1,6 @@
 %% preperation for applying the chosen method
-%generates data files
-%by Lisa Fischer
+% generates data files
+% by Lisa Fischer
 function [] = main_SDCSDEs(d, sde_solver, nodes, strInit, colpoints, maxIter, steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
 
 fprintf('START PROGRAM using the solver: %s \n', sde_solver)
@@ -35,7 +35,7 @@ elseif strcmp(d, 'TP3')
     [rhs, stochRhs, J, RhsIto, exact] = problem3(lambda, beta);
     initial = 0.5;
     order = 1;
-    t_end = steps(1); % for doing one timestep only
+    t_end = 1; %steps(1); % for doing one timestep only
 elseif strcmp(d, 'TP4')
     lambda = [1.5 -0.85; 1.275 -0.625];
     B1 = [0.9 -0.2; 0.3 0.4];
@@ -50,13 +50,6 @@ elseif strcmp(d, 'OU')
     [rhs, stochRhs, J, RhsIto, exact] = problemOU(lambda, beta);
     initial = 0.5;
     order = 1;
-elseif strcmp(d, 'Mattingly')
-    lambda = -2.0;
-    beta = 1.0;
-    [rhs, stochRhs, J, RhsIto, exact] = problemMattingly(lambda, beta);
-    initial = 2.0;
-    order = 1;
-    t_end = 2;
 else
     lambda =0;
     beta = 1;
@@ -85,7 +78,7 @@ errorT = zeros(order,nSteps);
 
 %global solRefFinestAll
 
-if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
+if strcmp(d, 'OU') 
   solRefFinestAll = 0;
 else
   solRefFinestAll = zeros(order, NNfinest+1, realIter);
@@ -182,14 +175,16 @@ for p=1:length(mBB)
         etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
         
         if SBB == true
-        k=1;
-        bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
-        for k=2:NNfinest
-            bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
-        end
+            bM = zeros(order, NNfinest);
+            bbM = zeros(order, NNfinest+1);
+            k=1;
+            bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
+            for k=2:NNfinest
+                bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
+            end
         
-        bbM(:,:) = [zeros(order,1) bM(:,:)];
-        solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, bbM);
+            bbM(:,:) = [zeros(order,1) bM(:,:)];
+            solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, bbM);
               %ref sol using matlab ode solver  
 %                 y0 = initial;
 %                 tsolAppro = t_begin;
@@ -231,20 +226,20 @@ for p=1:length(mBB)
             %global solRef
             if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
               solRef = 0;
-            elseif strcmp(d, 'TP3')
-              
-%               if k == 1            
-%                 etaCurrSteps = zeros(order,intervals+1);
-%                 for l=1:realIter
-%                   for o=1:order
-%                     etaMat = eta{o}(l,:);
-%                     etaCurrSteps(o,:) = [0 etaMat(NNfinest/intervals:NNfinest/intervals:end)];                   
-%                   end         
-%                   allSolRef{n}( :, :, l) = exact(lambda, beta, t_begin, t_end, step_size, initial, etaCurrSteps);
-%                 end
-%               end
-              solRef = zeros(order, intervals+1, realIter);
-%               solRef(:,:,:) = allSolRef{n}(:,:,:);
+%             elseif strcmp(d, 'TP3')
+% 
+% %               if k == 1            
+% %                 etaCurrSteps = zeros(order,intervals+1);
+% %                 for l=1:realIter
+% %                   for o=1:order
+% %                     etaMat = eta{o}(l,:);
+% %                     etaCurrSteps(o,:) = [0 etaMat(NNfinest/intervals:NNfinest/intervals:end)];                   
+% %                   end         
+% %                   allSolRef{n}( :, :, l) = exact(lambda, beta, t_begin, t_end, step_size, initial, etaCurrSteps);
+% %                 end
+% %               end
+%               solRef = zeros(order, intervals+1, realIter);
+% %               solRef(:,:,:) = allSolRef{n}(:,:,:);
             else
               solRef = zeros(order, intervals+1, realIter);
               solRef(:,:,:) = solRefFinestAll(:,1:NNfinest/intervals:end,:);                

@@ -14,14 +14,14 @@ clear all
 % %sdc_choice = 'implMilDampNM';
 % %sdc_choice = 'implEMDampNM';
 % 
-% %%Create time grid
+% collocation nodes type
 % %nodes ='equidist';
 % %nodes ='legendre';
 % %nodes ='lobatto';
 % %includes right border
 % %nodes ='radau';
 % 
-% %%problem initialization
+% problem initialization
 % %strInit = 'constInit';
 % %strInit = 'eulerSBBInit';
 % %strInit = 'eMItoSDE';
@@ -73,16 +73,15 @@ clear all
 
 warning('off','MATLAB:MKDIR:DirectoryExists');
 diary myLogFile
-% TP3 with only one time step, check mean and variance of solution
-% distribution
-%deltaT = [1.0/64];
 nSamples = 1e4;
-for deltaT = [1/2; 1/4; 1/8; 1.0/16; 1/32; 1/64; 1/128; 1/256] %1/512; 1.0/64, 1.0/256, 1./1024]
-  for n=[4]
-    for m=[3]
+for deltaT = [1/16; 1/32; 1/64; 1/128; 1/256; 1/512; 1/1024]
+  for n=[4] % collocation points
+    for m=[1] % Brownian Bridge terms
       %fprintf("\n\n=====================================================================================================\n");
       %fprintf(" n = %d, m = %d\n", n, m);
-      main_SDCSDEs('TP2',    'SDC_BB',   'lobatto', 'eulerSBBInit', n, 10, deltaT, 1024, nSamples,  m, false,   true, true);
+      
+      %           (    d,  sde_solver,      nodes,       strInit, colpoints, maxIter,  steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
+      main_SDCSDEs('TP2',    'SDC_BB',   'lobatto', 'eulerSBBInit',        n,      10, deltaT,     1024, nSamples,   m,    false,      true, false);
       %fprintf("\n\n=====================================================================================================\n");
     end
   end
