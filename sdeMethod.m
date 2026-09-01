@@ -1,5 +1,5 @@
 %% This function chooses between EM, Milstein and SDC method
-function [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, order, eta, exact, d, xi, plot_Error, plot_Sol, strInit, m, solRefAll)
+function [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit, m, solRefAll)
 time = t_begin:step_size:t_end;
 nTime = intervals + 1;
 NNCurrent = (t_end-t_begin) / step_size;
@@ -7,29 +7,29 @@ downsampleFactor = NNfinest / NNCurrent;
 countRhsEvaluations = 0;
 
 %% choose SDC method
-if strcmp(sde_solver,'SDC_BB')
+if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the cleaned up version
     
     parameters = [col_points, intervals, max_iter, t_begin, t_end];
     
     %computes spectral matrix (S), the micro time nodes (t) and macro time nodes (x)
     [S, t, ~] = computeSpecMat(t_begin, t_end, step_size, intervals, col_points, nodes);
 
-        sumSol=zeros(order, nTime);
-        sumSolRef=zeros(order, nTime);
-        diffSol = zeros(order, nTime);
+        sumSol=zeros(nComponents, nTime);
+        sumSolRef=zeros(nComponents, nTime);
+        diffSol = zeros(nComponents, nTime);
         diff = 0;
         
         sumSolT2 = 0;
         
         compTime = 0;
         solsSDC = zeros(realIter, 1);
-        etaCurrSteps = zeros(order, nTime);
-        eta0 = zeros(order, nTime);
-        xi_l = zeros(order, m-1, intervals);
+        etaCurrSteps = zeros(nComponents, nTime);
+        eta0 = zeros(nComponents, nTime);
+        xi_l = zeros(nComponents, m-1, intervals);
         
         
         for l=1:realIter
-            for k=1:order
+            for k=1:nComponents
                 etaMat = eta{k}(l,:);%eta{k}(l,:); %always use l=1 for a tied down process? i.e. all going through the same nodes
                 % only xi, i.e., the cosine parts in the bridge vary
                 etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
@@ -55,7 +55,7 @@ if strcmp(sde_solver,'SDC_BB')
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDC, countRhsEvaluationsThisRun] = SDC_SDE_BB(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, order, xi_l, strInit, m, tol);
+            [solSDC, countRhsEvaluationsThisRun] = SDC_SDE_BB_NEW(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
@@ -203,18 +203,18 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
     %computes spectral matrix (S), the micro time nodes (t) and macro time nodes (x)
     [S, t, ~] = computeSpecMat(t_begin, t_end, step_size, intervals, col_points, nodes);
 
-        sumSol=zeros(order, nTime);
-        sumSolRef=zeros(order, nTime);
-        diffSol = zeros(order, nTime);
+        sumSol=zeros(nComponents, nTime);
+        sumSolRef=zeros(nComponents, nTime);
+        diffSol = zeros(nComponents, nTime);
         diff = 0;
         
         compTime = 0;       
-        etaCurrSteps = zeros(order, nTime);
-        eta0 = zeros(order, nTime);
-        xi_l = zeros(order, m-1, intervals);       
+        etaCurrSteps = zeros(nComponents, nTime);
+        eta0 = zeros(nComponents, nTime);
+        xi_l = zeros(nComponents, m-1, intervals);       
         
         for l=1:realIter
-            for k=1:order
+            for k=1:nComponents
                 etaMat = eta{k}(l,:);
                 etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
                 eta0(k,:) = etaCurrSteps(k,1:end)- [0, etaCurrSteps(k,1:end-1)];
@@ -236,7 +236,7 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDC, countRhsEvaluationsThisRun] = SDC_SDE_BB_impl(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, order, xi_l, strInit, m, tol, J);
+            [solSDC, countRhsEvaluationsThisRun] = SDC_SDE_BB_impl(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol, J);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
@@ -271,17 +271,17 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
         %% Euler Maruyama
         if (strcmp (nodes, 'equidist'))
             
-            sumSol=zeros(order, nTime);
-            sumSolRef=zeros(order, nTime);
-            diffSol = zeros(order, nTime);
+            sumSol=zeros(nComponents, nTime);
+            sumSolRef=zeros(nComponents, nTime);
+            diffSol = zeros(nComponents, nTime);
             diff = 0;
             compTime = 0;
-            etaCurrSteps = zeros(order, nTime);
+            etaCurrSteps = zeros(nComponents, nTime);
             
             %loop over #realizations
             for l=1:realIter
                 %choose Brownian motion & compute its increments
-                for k=1:order
+                for k=1:nComponents
                     etaMat = eta{k}(l,:);
                     etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
                 end
@@ -289,7 +289,7 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
                 
                 %calls EulerMaruyama.m
                 tic
-                [ sol, countRhsEvaluationsThisRun, ~ ] = EulerMaruyama( initial, step_size, t_begin, t_end, RhsIto, stochRhs, deltaW, order);
+                [ sol, countRhsEvaluationsThisRun, ~ ] = EulerMaruyama( initial, step_size, t_begin, t_end, RhsIto, stochRhs, deltaW, nComponents);
                 elapsedTime = toc;
                 %compute time for EM approximation
                 compTime = compTime +elapsedTime;
@@ -325,16 +325,16 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
         %% Milstein method
         if (strcmp (nodes, 'equidist'))
             
-            sumSol=zeros(order, nTime);
-            sumSolRef=zeros(order, nTime);
-            diffSol = zeros(order, nTime);
+            sumSol=zeros(nComponents, nTime);
+            sumSolRef=zeros(nComponents, nTime);
+            diffSol = zeros(nComponents, nTime);
             diff = 0;
             compTime = 0;
-            etaCurrSteps = zeros(order, nTime);
+            etaCurrSteps = zeros(nComponents, nTime);
             
             for l=1:realIter
                 %choose Brownian motion and compute its increments
-                for k=1:order
+                for k=1:nComponents
                     etaMat = eta{k}(l,:);
                     etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
                 end
@@ -343,13 +343,13 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
                 %calls Milstein.m
                 %notice that in multidim case, Milstein uses the Stratonovich
                 %form not the Ito one
-                if (order >1)
+                if (nComponents >1)
                     tic
-                    [ sol, countRhsEvaluationsThisRun, ~ ] = Milstein( initial, step_size, t_begin, t_end, beta, rhs, stochRhs, J, deltaW, order);
+                    [ sol, countRhsEvaluationsThisRun, ~ ] = Milstein( initial, step_size, t_begin, t_end, beta, rhs, stochRhs, J, deltaW, nComponents);
                     elapsedTime = toc;
                 else
                     tic
-                    [ sol, countRhsEvaluationsThisRun, ~ ] = Milstein( initial, step_size, t_begin, t_end, beta, RhsIto, stochRhs, J,deltaW, order);
+                    [ sol, countRhsEvaluationsThisRun, ~ ] = Milstein( initial, step_size, t_begin, t_end, beta, RhsIto, stochRhs, J,deltaW, nComponents);
                     elapsedTime = toc;
                 end
                 compTime = compTime +elapsedTime;
@@ -384,16 +384,16 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
         %% implicit Milstein method
         if (strcmp (nodes, 'equidist'))
             
-            sumSol=zeros(order, nTime);
-            sumSolRef=zeros(order, nTime);
-            diffSol = zeros(order, nTime);
+            sumSol=zeros(nComponents, nTime);
+            sumSolRef=zeros(nComponents, nTime);
+            diffSol = zeros(nComponents, nTime);
             diff = 0;
             compTime = 0;
-            etaCurrSteps = zeros(order, nTime);
+            etaCurrSteps = zeros(nComponents, nTime);
             
             for l=1:realIter
                 %choose Brownian motion and compute its increments
-                for k=1:order
+                for k=1:nComponents
                     etaMat = eta{k}(l,:);
                     etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
                 end
@@ -402,13 +402,13 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
                 %calls Milstein.m
                 %notice that in multidim case, Milstein uses the Stratonovich
                 %form not the Ito one
-                if (order >1)
+                if (nComponents >1)
                     tic
-                    [ sol, countRhsEvaluationsThisRun, ~ ] = ImplMilsteinDampNM( initial, step_size, t_begin, t_end, beta, rhs, stochRhs, J, deltaW, order);
+                    [ sol, countRhsEvaluationsThisRun, ~ ] = ImplMilsteinDampNM( initial, step_size, t_begin, t_end, beta, rhs, stochRhs, J, deltaW, nComponents);
                     elapsedTime = toc;
                 else
                     tic
-                    [ sol, countRhsEvaluationsThisRun, ~ ] = ImplMilsteinDampNM( initial, step_size, t_begin, t_end, beta, RhsIto, stochRhs, J,deltaW, order);
+                    [ sol, countRhsEvaluationsThisRun, ~ ] = ImplMilsteinDampNM( initial, step_size, t_begin, t_end, beta, RhsIto, stochRhs, J,deltaW, nComponents);
                     elapsedTime = toc;
                 end
                 compTime = compTime +elapsedTime;
@@ -445,17 +445,17 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
         % 'implEMDampNM'
         if (strcmp (nodes, 'equidist'))
             
-            sumSol=zeros(order, nTime);
-            sumSolRef=zeros(order, nTime);
-            diffSol = zeros(order, nTime);
+            sumSol=zeros(nComponents, nTime);
+            sumSolRef=zeros(nComponents, nTime);
+            diffSol = zeros(nComponents, nTime);
             diff = 0;
             compTime = 0;
-            etaCurrSteps = zeros(order, nTime);
+            etaCurrSteps = zeros(nComponents, nTime);
             
             %loop over #realizations
             for l=1:realIter
                 %choose Brownian motion & compute its increments
-                for k=1:order
+                for k=1:nComponents
                     etaMat = eta{k}(l,:);
                     etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
                 end
@@ -463,7 +463,7 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
                 
                 %calls EulerMaruyama.m
                 tic
-                [ sol, countRhsEvaluationsThisRun, ~ ] = ImplEulerMaruyamaDampNM( initial, step_size, t_begin, t_end, RhsIto, stochRhs, deltaW, order);
+                [ sol, countRhsEvaluationsThisRun, ~ ] = ImplEulerMaruyamaDampNM( initial, step_size, t_begin, t_end, RhsIto, stochRhs, deltaW, nComponents);
                 elapsedTime = toc;
                 %compute time for EM approximation
                 compTime = compTime +elapsedTime;
