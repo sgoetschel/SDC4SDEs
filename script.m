@@ -73,15 +73,16 @@ clear all
 
 warning('off','MATLAB:MKDIR:DirectoryExists');
 diary myLogFile
+maxSweeps = 100;
 nSamples = 1e4;
-for deltaT = [1/16; 1/32; 1/64; 1/128; 1/256; 1/512; 1/1024]
-  for n=[4] % collocation points
-    for m=[1] % Brownian Bridge terms
+for deltaT = [1/2; 1/4; 1/8; 1/16] %; 1/32; 1/64; 1/128] %; 1/256; 1/512]
+  for n=[7] % collocation points
+    for m=[2] % Brownian Bridge terms
       %fprintf("\n\n=====================================================================================================\n");
       %fprintf(" n = %d, m = %d\n", n, m);
       
-      %           (    d,  sde_solver,      nodes,       strInit, colpoints, maxIter,  steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
-      main_SDCSDEs('TP2',    'SDC_BB',   'lobatto', 'eulerSBBInit',        n,      10, deltaT,     1024, nSamples,   m,    false,      true, false);
+      %           (    d,  sde_solver,      nodes,       strInit, colpoints,  maxSweeps,  steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
+      main_SDCSDEs('TP3',    'SDC_BB',   'lobatto', 'constInit',        n, maxSweeps, deltaT,     1024, nSamples,   m,    true,      false, false);
       %fprintf("\n\n=====================================================================================================\n");
     end
   end

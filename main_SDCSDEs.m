@@ -76,6 +76,8 @@ errStr = zeros(nComponents,nSteps);
 errorL2 = zeros(nComponents,nSteps);
 errorT = zeros(nComponents,nSteps);
 
+totalTime = 0;
+
 %global solRefFinestAll
 
 if strcmp(d, 'OU') 
@@ -249,7 +251,8 @@ for p=1:length(mBB)
             
             %function call to compute EM, Milstein or SDC approximation
             [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit,m, solRef);
-            
+            totalTime = totalTime + compTime;
+
             %preparation for output saving
             errW(:,n) = errWeak;
             errStr(:,n) = errStrong;
@@ -294,8 +297,44 @@ for p=1:length(mBB)
           fprintf( '%1.6e \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f  \n', steps(i), errStr(1,i), eocStr(i), errW(1,i), eocWeak(i), errorL2(1,i), eocL2(i), errorT(1,i), eocT(i));
         end
         
-        fprintf( '\n compTime %f s\n' , compTime);
-        
+        fit = polyfit(log(steps), log(errStr), 1);
+        strongOrder = fit(1);
+        expectedStrongOrder = 3;
+        errC = errStr(1) / steps(1)^expectedStrongOrder;
+        strongErr_fit = errC * steps .^ expectedStrongOrder;
+
+
+        fit = polyfit(log(steps), log(errW), 1);
+        weakOrder = fit(1);
+        expectedWeakOrder = 3;
+        errC = errW(1) / steps(1)^expectedWeakOrder;
+        weakErr_fit = errC * steps.^expectedWeakOrder;
+
+        fprintf('Estimated convergence orders:\n   - strong %.3f\n   -  weak %.3f\n', strongOrder, weakOrder);
+
+        fprintf( '\ntotal solver time (of time stepper/integrator): %f s\n' , totalTime);
+  
+        figErrStrong = figure;
+        hold on
+        loglog(steps, errStr, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2)
+        loglog(steps, strongErr_fit, '--b', 'LineWidth', 1.5);
+        xlabel('time step', 'FontSize', 16);
+        ylabel('strong error','FontSize', 16);
+        set(gca,'FontSize',14)
+        set(gca, 'YScale', 'log')
+        set(gca, 'XScale', 'log')
+
+
+        figErrWeak = figure;
+        hold on
+        loglog(steps, errW, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2)
+        loglog(steps, weakErr_fit, '--b', 'LineWidth', 1.5);
+        xlabel('time step', 'FontSize', 16);
+        ylabel('weak error','FontSize', 16);
+        set(gca,'FontSize',14)
+        set(gca, 'YScale', 'log')
+        set(gca, 'XScale', 'log')
+
         %save error data in file
         for q=1:nComponents
             if (nComponents >1)

@@ -5,6 +5,7 @@ nTime = intervals + 1;
 NNCurrent = (t_end-t_begin) / step_size;
 downsampleFactor = NNfinest / NNCurrent;
 countRhsEvaluations = 0;
+skippedRealizations = 0; % to catch if SDC does not converge for certain random variables
 
 %% choose SDC method
 if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the cleaned up version
@@ -55,11 +56,15 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDC, countRhsEvaluationsThisRun] = SDC_SDE_BB_NEW(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
+            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB_NEW(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
-            solSDC =  solSDC(:,1:col_points-1:end);
+            if min(correctionNorms(:)) > 1e-10 || any(isnan(solSDCfull(:)))
+                skippedRealizations = skippedRealizations + 1;
+                continue;
+            end
+            solSDC =  solSDCfull(:,1:col_points-1:end);
             
             %exact solution at macro time steps
 %             if strcmp(d, 'TP3')
@@ -132,8 +137,9 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         end %for loop realIter
         
         %calculate expected solution for each time point t
-        sol= sumSol/realIter;
-        solExactRef = sumSolRef/realIter;
+        fprintf('\nskipped realizations: %d', skippedRealizations);
+        sol= sumSol/(realIter-skippedRealizations);
+        solExactRef = sumSolRef/(realIter-skippedRealizations);
         
 %         if strcmp(d, 'TP3') % compute reference solution new with sample paths
 %           nstepsRef = 1000;
@@ -160,6 +166,7 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
 %         hist(solsRef,20);
         
         solsRef = squeeze(solRefAll(1,end,:));
+        fprintf("\n at final time:");
         fprintf("\n mean reference \t mean SDC \t err mean \t var reference \t var SDC \t err var\n");
         fprintf("---------------------------------------------------------------------------------------------------\n");
         errMean =  abs(mean(solsRef)-mean(solsSDC));
@@ -178,14 +185,6 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
           errL2 = abs(sumSolT2-refEx2); %weak convergence, test function phi = x^2
           errStrong = NaN;
           errT = NaN;
-        elseif strcmp(d, 'Mattingly')          
-          sumSolT2 = sumSolT2 / realIter;
-          x0 = initial();
-          refEx2 = x0^2*exp((2*lambda+1)*t_end) + 4*(exp((2*lambda+1)*t_end)-1)/(2*lambda+1);
-          errWeak = NaN;
-          errL2 = abs(sumSolT2-refEx2); %weak convergence, test function phi = x^2
-          errStrong = NaN;
-          errT = errL2 / refEx2;   % relative error
         else          
           errWeak = max(abs(sol-solExactRef),[],2);
           errStrong = (diffSol(:,end)./realIter);
@@ -497,6 +496,8 @@ elseif strcmp(sde_solver,'SDC_BB_impl')
         
 end %choice of method
     
+countRhsEvaluations = round(countRhsEvaluations / realIter); % average number of rhs evaluations per realization
+
     if (plot_Error == true)
         plot_err(step_size, errWeak, errStrong, errL2, errT);
     end

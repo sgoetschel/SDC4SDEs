@@ -20,7 +20,7 @@
 % nBridgeTerms - number of terms in the bridge
 % tol - stopping tolerance: stop sweeps if correction norm < tol
 
-function [ sol, countRhsEvaluations ] = SDC_SDE_BB_NEW( parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
+function [ sol, countRhsEvaluations, correctionNorms ] = SDC_SDE_BB_NEW( parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
 
 col_points = parameters(1);
 intervals = parameters(2);
@@ -45,6 +45,7 @@ y0 = initialValue;
 
 correctionNorm=-1;
 countRhsEvaluations = 0;
+correctionNorms = zeros(intervals, max_sweeps);
 
 t_begin = t(1);
 %for each sub time interval
@@ -164,8 +165,8 @@ for i=1:intervals
             stoch_rhs_diff = zeros(nComponents, 1);
             for n=1:size(beta,2)
                 %terms for stoch spectral integration
-                stoch_rhs = stochRhs{n}(  phi());
-                stoch_rhs_err = stochRhs{n}(  phi(:,p-1)+d(:, p-1) );
+                stoch_rhs = stochRhs{n}(phi);
+                stoch_rhs_err = stochRhs{n}( phi(:,p-1)+d(:, p-1) );
                 stoch_rhs_prev = stoch_rhs(:,p-1);
                 countRhsEvaluations = countRhsEvaluations + 2;
                 
@@ -173,14 +174,20 @@ for i=1:intervals
                 if (nBridgeTerms>1)
                     % loop over expansion terms: sum_1^m {xi_k * Q_k}
                     % include random variables xi as in the Karhunen-Loeve expansion
-                    Q = zeros(nComponents,size(quadMatK_c, 2));
-                    for l=1:nBridgeTerms-1
-                        Q = Q + quadMatK_c(p-1,:, l).*xi(:,l,i);
-                    end
+                    %Q = zeros(nComponents,size(quadMatK_c, 2));
+                    %for l=1:nBridgeTerms-1
+                    %    Q = Q + quadMatK_c(p-1,:, l).*xi(:,l,i);
+                    %end
                     
-                    Q= sqrt(2/deltaT)*Q;
+                    %Q= sqrt(2/deltaT)*Q;
                     for y=1:nComponents
-                    stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
+                        %stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
+                        stoch_rhs_integrate_bm(y) = 0;
+                        for l=1:nBridgeTerms-1
+                            stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
+                                (quadMatK_c(p-1,:, l)*stoch_rhs(y,:)')'.*xi(:,l,i);
+                        end
+                        stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT);
                     end
                     dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
                 else
@@ -203,14 +210,15 @@ for i=1:intervals
         phi = phi + d;
         
         correctionNorm = norm(d);
-        
+        correctionNorms(i,j) = correctionNorm;
+
         if (correctionNorm < tol)
             break;
         end
         
     end %iterations
     % if correctionNorm > tol
-    %     correctionNorm
+    %     correctionNorm;
     % end
     y0 = phi(:,end);
     sol(:,int_begin:int_end) = phi;
