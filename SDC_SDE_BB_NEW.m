@@ -51,6 +51,16 @@ t_begin = t(1);
 %for each sub time interval
 for i=1:intervals
     %fprintf('\n %d interval of %d \n', i, intervals)
+
+    % % debug: recompute integration matrices per interval
+    % S_pre = S;
+    % quadMatK_c_pre = quadMatK_c;
+    % t_pre = t;
+    % [S, t, ~] = computeSpecMat(t_begin, t_begin+deltaT, deltaT, 1, col_points, nodes);
+    % if(nBridgeTerms>1)
+    %     %compute quadrature matrix for each expansion term
+    %     [quadMatK_c] = quadMatKFun(t, deltaT, nodes, nBridgeTerms-1);
+    % end
     
     %draw samples for more than one Karhunen-Loeve expansion term
     %xi = randn(order,m-1);
@@ -73,7 +83,10 @@ for i=1:intervals
         
         if(nBridgeTerms>1)
             %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+
+            % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+            %dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            dbBridge = dbrownianBridge(deltaT, t_currInt(1)-t_currInt(1), xi(:,:,i));
         else
             dbBridge = zeros(nComponents,1);
         end
@@ -92,7 +105,9 @@ for i=1:intervals
         
         for k=2:points
             if(nBridgeTerms>1)
-                dbBridge = dbrownianBridge(deltaT, t_currInt(k-1), xi(:,:,i));
+                %dbBridge = dbrownianBridge(deltaT, t_currInt(k-1), xi(:,:,i));
+                % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+                dbBridge = dbrownianBridge(deltaT, t_currInt(k-1)-t_currInt(1), xi(:,:,i));
             else
                 dbBridge = zeros(nComponents,1);
             end
@@ -137,7 +152,9 @@ for i=1:intervals
         
         if(nBridgeTerms>1)
             %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+            %dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            dbBridge = dbrownianBridge(deltaT, t_currInt(1)-t_currInt(1), xi(:,:,i));
         else
             dbBridge = zeros(nComponents,1);
         end
@@ -189,7 +206,9 @@ for i=1:intervals
                         end
                         stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT);
                     end
-                    dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
+                    % dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
+                    % this needs t-t_left, so t_currInt(p-1)-t_currInt(1)
+                    dbBridge = dbrownianBridge(deltaT, t_currInt(p-1)-t_currInt(1), xi(:,:,i));
                 else
                     stoch_rhs_integrate_bm = zeros(nComponents,1);
                 end

@@ -61,7 +61,7 @@ end
 %time grid
 nSteps = length(steps);
 fprintf('finest time grid: %d', NNfinest);
-nRndVar = NNfinest;
+nRndVar = NNfinest;   % one per finest time step
 eta = cell(1,nComponents);
 xi = cell(1,nComponents);
 %Brownian motion W(t) valid on [0,1] without W(0)
@@ -93,8 +93,23 @@ for p=1:length(mBB)
     m = mBB(p);
     if (m >1)
         %draw samples for more than one Karhunen-Loeve expansion term
+   
         for k=1:nComponents
+            % this creates *random* KL terms, that are *not* the KL-expansion
+            % of the actual Brownian motion used
             xi{k} = randn(realIter,m-1, NNfinest);
+
+            % alternative: use correct Fourier coefficients for the given
+            % eta; this should be constructed for each time discretization
+            % separately -> not here, but inside the SDC_SDE_BB method (for
+            % each time interval), or (as implemented) before the call to SDC 
+            % within sdeMethod.m
+
+            % dW = eta{k}(:,2:end)-eta{k}(:,1:end-1);
+            % dW = [zeros(realIter,1) dW];
+            % nvec = (0:NNfinest-1)';
+            % C = cos(pi/NNfinest * nvec * (m-1));
+            % xi{k}(:,m-1) = (sqrt(2/t_end) * C' * dW')';
         end
     else
         for k=1:nComponents
@@ -172,20 +187,29 @@ for p=1:length(mBB)
             etaMat = eta{k}(l,:);
             etaFin(k,:) = [0 etaMat];
             etaFinest(k,:) = etaFin(k,1:end)- [0, etaFin(k,1:end-1)];
-            xiFinest(k,:,:) = xi{k}(l,:,:);
+            xiFinest(k,:,:) = xi{k}(l,:,:); % todo: determine KL coefficients for full Brownian motion
         end
         etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
         
-        if SBB == true
-            bM = zeros(nComponents, NNfinest);
-            bbM = zeros(nComponents, NNfinest+1);
-            k=1;
-            bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
-            for k=2:NNfinest
-                bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
-            end
-        
-            bbM(:,:) = [zeros(nComponents,1) bM(:,:)];
+        if SBB == true  % use exact sol with SBB approx or ODE solver for the SBB approximation as reference
+            % bM = zeros(nComponents, NNfinest);
+            % bbM = zeros(nComponents, NNfinest+1);
+            % k=1;
+            % bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
+            % for k=2:NNfinest
+            %     bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
+            % end
+            % bbM(:,:) = [zeros(nComponents,1) bM(:,:)];
+            
+            % one component only
+            dW = etaFin(1,2:end)-etaFin(1,1:end-1);
+            tRef = linspace(t_begin,t_end,NNfinest+1);
+            CosMat = cos(pi/t_end * tRef(1:end-1)' * (1:m-1)); %cos(pi/nStepsRef * n * k);
+            xiSBB = (sqrt(2/t_end) * CosMat' * dW')';
+            SinMat = sin(pi/t_end * tRef' * (1:m-1));
+            BBcoeff_a = sqrt(2*t_end) ./ (pi*(1:m-1)) .* xiSBB;
+            bbM = (tRef/t_end).*etaFin(k,end) + (SinMat*BBcoeff_a')'; 
+
             solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, bbM);
               %ref sol using matlab ode solver  
 %                 y0 = initial;
@@ -298,17 +322,17 @@ for p=1:length(mBB)
         end
         
         fit = polyfit(log(steps), log(errStr), 1);
-        strongOrder = fit(1);
-        expectedStrongOrder = 3;
-        errC = errStr(1) / steps(1)^expectedStrongOrder;
-        strongErr_fit = errC * steps .^ expectedStrongOrder;
-
+        strongOrder=fit(1);
+        errC = errStr(1) / steps(1)^strongOrder;
+        strongErr_fit = errC * steps .^ strongOrder;
+        strongTxt = sprintf('Estimated strong order: %.2f\n',strongOrder);
 
         fit = polyfit(log(steps), log(errW), 1);
         weakOrder = fit(1);
-        expectedWeakOrder = 3;
-        errC = errW(1) / steps(1)^expectedWeakOrder;
-        weakErr_fit = errC * steps.^expectedWeakOrder;
+        errC = errW(1) / steps(1)^weakOrder;
+        weakErr_fit = errC * steps.^weakOrder;
+        weakTxt = sprintf('Estimated weak order: %.2f\n',weakOrder);
+
 
         fprintf('Estimated convergence orders:\n   - strong %.3f\n   -  weak %.3f\n', strongOrder, weakOrder);
 
@@ -316,24 +340,30 @@ for p=1:length(mBB)
   
         figErrStrong = figure;
         hold on
-        loglog(steps, errStr, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2)
-        loglog(steps, strongErr_fit, '--b', 'LineWidth', 1.5);
+        title(['m =  ',num2str(m)])
+        loglog(steps, errStr, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2, 'DisplayName', 'error')
+        loglog(steps, strongErr_fit, '--b', 'LineWidth', 1.5, 'DisplayName', strongTxt);
         xlabel('time step', 'FontSize', 16);
         ylabel('strong error','FontSize', 16);
         set(gca,'FontSize',14)
         set(gca, 'YScale', 'log')
         set(gca, 'XScale', 'log')
+        legend('Location','best');
 
 
         figErrWeak = figure;
         hold on
-        loglog(steps, errW, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2)
-        loglog(steps, weakErr_fit, '--b', 'LineWidth', 1.5);
+        title(['m =  ',num2str(m)])
+        loglog(steps, errW, '-ro', 'MarkerFaceColor', 'r', 'LineWidth', 2, 'DisplayName', 'error')
+        loglog(steps, weakErr_fit, '--b', 'LineWidth', 1.5, 'DisplayName', weakTxt);
+        
         xlabel('time step', 'FontSize', 16);
         ylabel('weak error','FontSize', 16);
         set(gca,'FontSize',14)
         set(gca, 'YScale', 'log')
         set(gca, 'XScale', 'log')
+        legend('Location','best');
+
 
         %save error data in file
         for q=1:nComponents

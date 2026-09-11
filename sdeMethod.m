@@ -31,11 +31,30 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         
         for l=1:realIter
             for k=1:nComponents
-                etaMat = eta{k}(l,:);%eta{k}(l,:); %always use l=1 for a tied down process? i.e. all going through the same nodes
-                % only xi, i.e., the cosine parts in the bridge vary
-                etaCurrSteps(k,:) = [0 etaMat(downsampleFactor:downsampleFactor:end)];
-                eta0(k,:) = etaCurrSteps(k,1:end)- [0, etaCurrSteps(k,1:end-1)];
-                xi_l(k,:,:) = xi{k}(l,:,downsampleFactor:downsampleFactor:end);
+                etaMat = [0 eta{k}(l,:)];
+                etaCurrSteps(k,:) = etaMat(1:downsampleFactor:end);
+                eta0(k,2:end) = etaCurrSteps(k,2:end)-etaCurrSteps(k,1:end-1); % first is unused in SBB
+               
+                %xi_l(k,:,:) = xi{k}(l,:,downsampleFactor:downsampleFactor:end); % this takes arbitrary coefficients, but we want to approximate a given Brownian motion
+                if m > 1
+                    for ii=1:intervals
+                        leftidx = (ii-1)*downsampleFactor+1;
+                        rightidx = ii*downsampleFactor;
+                        dW = etaMat(leftidx:rightidx) - [0 etaMat(leftidx:rightidx-1)];
+                        nvec = (0:downsampleFactor-1)';
+                        C = cos(pi/downsampleFactor * nvec * (1:m-1)');
+                        xi_l(k,:,ii) = (sqrt(2/time(ii+1)) * C' * dW')';
+    
+                        % % debug: reconstruct Brownian motion from KL
+                        % % on full subsampled interval; Correct
+                        % % Reconstruction matrix
+                        % t_subinterval = linspace(time(ii), time(ii+1), downsampleFactor+1);
+                        % Smat = sin(pi * ((t_subinterval'-time(ii))/(time(ii+1)-time(ii))) * (1:m-1)');
+                        % % Brownian-bridge coefficients
+                        % a = sqrt(2*time(ii+1)) ./ (pi*(1:m-1)) .* xi_l(k,:,ii);
+                        % W_K = etaCurrSteps(k,ii) + ((t_subinterval-time(ii))/(time(ii+1)-time(ii))).*eta0(k,ii+1) + (Smat(:,1:m-1)*a(:,1:m-1)')'; 
+                    end
+                end
             end
             eta0 = sqrt(1/step_size)*eta0;
             % eta0 now has variance 1 (before: variance deltaT)
@@ -51,7 +70,8 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
                 %quadMatK_s = 0;
             end
                                 
-            %dW approximation
+            %dW approximation; this is just used in the Euler for Ito
+            %initialization
             deltaW = etaCurrSteps(:,2:end)- etaCurrSteps(:,1:end-1);
             
             %calls SDC_SDE_BB.m to compute SDC approximation
