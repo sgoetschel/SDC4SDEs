@@ -84,8 +84,11 @@ S = sin(pi/T * tRef' * k);
 % Brownian-bridge coefficients
 a = sqrt(2*T) ./ (pi*k) .* xi;
 
-
-% compute exact solutions to reference Brownian motion and WZ-approximation
+%% ================================================================
+%  Evaluate Wong-Zakai approximation error for the full solution
+%  No use of Brownian bridges here!
+%  Reference: with sampled Brownian motion on fine time grid
+%  Approximation: use KL-expansion instead of sampled Brownian motion
 for i = 1:nK
     K = Kvalues(i);
 
@@ -170,144 +173,9 @@ title('Wong-Zakai convergence');
 legend('Location','best');
 
 
-% sample random coefficients for the KL-expansion
-xiKL = randn(nRealizations, Kmax);  
-% this includes linear part (for the full WZ-approx);
-% later for the BB the linear part is handled separately using the correct
-% subsampled Brownian motion to construct a bridge
-
-% evaluate solution on finest discretization with sampled Brownian motion 
-% this is the exact reference solution
-
-tRef = linspace(0,T,nStepsRef+1);
-integrandRef = exp(eta+tRef/2);
-
 
 %% ================================================================
-%  Evaluate Wong-Zakai approximation error for the full solution
-%  No use of Brownian bridges here!
-%  Reference: with sampled Browinan motion on fine time grid
-%  Approximation: use KL-expansion instead of sampled Brownian motion
-
-XK = zeros(nRealizations,nK,nStepsRef+1);
-meanApprox = zeros(nK,1);
-varApprox  = zeros(nK,1);
-
-for i = 1:nK
-    K = Kvalues(i);
-    fprintf('\nK = %d\n', K);
-
-    for r = 1:nRealizations
-        Wref = brownianFourierPath(tRef,xiKL(r,1:K),T); 
-        integrand = exp(Wref+tRef/2);
-        I = cumtrapz(tRef,integrand);
-        XK(r,i,:) = X0 * integrand ./ (1 + X0*I);
-
-        IRef = cumtrapz(tRef,integrandRef(r,:));
-        solRef(r,:) = X0 * integrandRef(r,:) ./ (1 + X0*IRef);
-    end
-    meanApprox(i) = mean(XK(:,i,end));
-    varApprox(i)  = var(XK(:,i,end));
-    fprintf('  Mean             = %.12e\n',meanApprox(i));
-    fprintf('  Variance         = %.12e\n',varApprox(i));
-end
-
-meanRef = mean(solRef(:,end));
-varRef  = var(solRef(:,end));
-
-fprintf('\nReference statistics:\n');
-fprintf('  E[X(T)]     = %.12e\n',meanRef);
-fprintf('  Var[X(T)]   = %.12e\n',varRef);
-
-% error = X^K - X at final time
-% only due to full WZ with varying number of terms, on tinest time grid
-% contains no time discretization error
-
-errorWZ_L1 = zeros(nK,1);
-errorWZ_L2 = zeros(nK,1);
-
-for i = 1:nK
-    err = XK(:,i, end) - solRef(:,i,end);
-
-    % strong final time errors
-    errorWZ_L1(i) = mean(abs(err));
-    errorWZ_L2(i) = sqrt(mean(err.^2));
-
-    % weak final time errors
-    weakMean(i) = abs(meanApprox(i)-meanRef);
-    weakVar(i) = abs(varApprox(i)-varRef);
-
-    fprintf('\n----------------------------------------\n');
-    fprintf('Number of Fourier modes: %d\n',Kvalues(i));
-
-    fprintf('Strong L1 error  = %.12e\n',errorWZ_L1(i));
-    fprintf('Strong L2 error  = %.12e\n',errorWZ_L2(i));
-
-    fprintf('Weak mean error  = %.12e\n',weakMean(i));
-    fprintf('Weak var error   = %.12e\n',weakVar(i));
-end
-
-% Fit slopes with respect to K.
-%
-% If error ~ K^(-q), then
-%
-%   log(error) = -q log(K) + C.
-
-pWZ_L1 = polyfit(log(Kvalues),log(errorWZ_L1'),1);
-pWZ_L2 = polyfit(log(Kvalues),log(errorWZ_L2'),1);
-
-fprintf('\n');
-fprintf('====================================================\n');
-fprintf('WONG-ZAKAI CONVERGENCE\n');
-fprintf('====================================================\n');
-fprintf('L1 order with respect to K = %.4f\n',-pWZ_L1(1));
-fprintf('L2 order with respect to K = %.4f\n',-pWZ_L2(1));
-
-%% Plot Wong-Zakai convergence
-
-figure;
-
-loglog(Kvalues,errorWZ_L1,'o-','DisplayName','L^1 error');
-hold on;
-loglog(Kvalues,errorWZ_L2,'s-','DisplayName','L^2 error');
-
-grid on;
-
-xlabel('number of Fourier modes K');
-ylabel('error at T');
-
-title('Wong-Zakai convergence');
-
-legend('Location','best');
-
-%% ================================================================
-% Construct X^K(T) 
-% ================================================================
-
-XK = zeros(nRealizations,nStepsizes,nK);   % this is the approximate solution using KL-expansion with varying number of terms
-X  = zeros(nRealizations,nStepsizes,nK);   % this is the "true" solution using the KL-expansion
-
-for i = 1:nK
-
-    K = Kvalues(i);
-
-    for n = 1:nStepsizes
-        
-        dtn = nSteps(n);
-        
-
-        % ------------------------------------------------------------
-        % Exact Wong-Zakai solution on all time grids
-        % ------------------------------------------------------------
-    
-        for r = 1:nRealizations
-            Wref = brownianFourierPath(tRef,xi(r,:),T); 
-        end
-    end
-end
-
-%% ================================================================
-% 1. RK4 TIME-STEP CONVERGENCE
+% RK4 TIME-STEP CONVERGENCE
 % ================================================================
 %
 % Fix K and vary h.
@@ -318,9 +186,9 @@ end
 %
 %       X_h^K - X^K
 
-Kfixed = 16;
+Kfixed = 64;
 
-hValues = T/(10*Kfixed) ./ 2.^(0:6);
+hValues = T/(Kfixed) ./ 2.^(0:6);
 
 nH = length(hValues);
 
@@ -328,8 +196,6 @@ errorTimeL1 = zeros(nH,1);
 errorTimeL2 = zeros(nH,1);
 
 idxK = find(Kvalues == Kfixed);
-
-XKref = XK(:,idxK);
 
 for ih = 1:nH
 
@@ -339,17 +205,20 @@ for ih = 1:nH
 
     for r = 1:nRealizations
 
-        Xh(r) = solveOU_WZ_RK4( ...
-            X0,T,h,lambda,mu,sigma,...
-            xiEndpoint(r), xiBridge(r,1:Kfixed),Kfixed);
+        Xh(r) = solve_WZ_RK4( ...
+            X0,T,h,lambda,beta,...
+            xiEndpoint(r), xi(r,1:Kfixed-1),Kfixed);
     end
 
-    err = Xh - XKref;
+    err_to_Ref = Xh - solRef(:,end);
+    err  = Xh - solW_K(:,idxK,end);
 
     errorTimeL1(ih) = mean(abs(err));
 
     errorTimeL2(ih) = sqrt(mean(err.^2));
 
+    errorRefTimeL1(ih) = mean(abs(err_to_Ref));
+    errorRefTimeL2(ih) = sqrt(mean(err_to_Ref.^2));
 end
 
 % Estimate slopes
@@ -368,9 +237,11 @@ fprintf('L2 order = %.4f\n',pTimeL2(1));
 
 figure;
 
-loglog(hValues,errorTimeL1,'o-','DisplayName','L^1 error');
+loglog(hValues,errorTimeL1,'o-','DisplayName','L^1 error to WZ');
 hold on;
-loglog(hValues,errorTimeL2,'s-','DisplayName','L^2 error');
+loglog(hValues,errorTimeL2,'s-','DisplayName','L^2 error to WZ');
+loglog(hValues,errorRefTimeL1,'s-','DisplayName','L^1 error to ref');
+loglog(hValues,errorRefTimeL2,'s-','DisplayName','L^2 error to ref');
 
 grid on;
 
@@ -380,15 +251,6 @@ ylabel('error at T');
 title(sprintf('RK4 time-step convergence, K = %d',Kfixed));
 
 legend('Location','best');
-
-%% ================================================================
-% 2. WONG-ZAKAI CONVERGENCE
-% ================================================================
-%
-% Compare the exact Wong-Zakai solution X^K with the exact
-% Brownian OU solution X.
-%
-
 
 %% ================================================================
 % 3. TOTAL ERROR
@@ -426,22 +288,20 @@ for i = 1:nK
 
     for r = 1:nRealizations
 
-        Xh(r) = solveOU_WZ_RK4( ...
-            X0,T,h,lambda,mu,sigma,...
-            xiEndpoint(r), xiBridge(r,1:K),K);
+        Xh(r) = solve_WZ_RK4( ...
+            X0,T,h,lambda,beta,...
+            xiEndpoint(r), xi(r,1:K-1),K);
 
     end
 
     % Time discretization component
-    errTime = Xh - XK(:,i);
+    errTime = Xh - solW_K(:,idxK,end);
 
     % Total error
-    errTotal = Xh - X(:,i);
+    errTotal = Xh - solRef(:,end);
 
     errorTime_L2(i) = sqrt(mean(errTime.^2));
-
     errorTotal_L2(i) = sqrt(mean(errTotal.^2));
-
 end
 
 %% Estimate total convergence order
@@ -484,7 +344,7 @@ legend('Location','best');
 % RK4 solver for the Wong-Zakai ODE
 % ================================================================
 
-function Xend = solveOU_WZ_RK4(X0, T, h, lambda, mu, sigma, ...
+function Xend = solve_WZ_RK4(X0, T, h, lambda, beta, ...
                                xiEndpoint, xiBridge, K)
 
     % Make T an exact endpoint
@@ -498,19 +358,19 @@ function Xend = solveOU_WZ_RK4(X0, T, h, lambda, mu, sigma, ...
         t = (n-1)*h;
 
         k1 = rhsWZ( ...
-            t,X,lambda,mu,sigma,xiEndpoint,xiBridge,K,T);
+            t,X,lambda,beta,xiEndpoint,xiBridge,K,T);
 
         k2 = rhsWZ( ...
             t+h/2,X+h*k1/2,...
-            lambda,mu,sigma,xiEndpoint,xiBridge,K,T);
+            lambda,beta,xiEndpoint,xiBridge,K,T);
 
         k3 = rhsWZ( ...
             t+h/2,X+h*k2/2,...
-            lambda,mu,sigma,xiEndpoint,xiBridge,K,T);
+            lambda,beta,xiEndpoint,xiBridge,K,T);
 
         k4 = rhsWZ( ...
             t+h,X+h*k3,...
-            lambda,mu,sigma,xiEndpoint,xiBridge,K,T);
+            lambda,beta,xiEndpoint,xiBridge,K,T);
 
         X = X + h*(k1+2*k2+2*k3+k4)/6;
 
@@ -525,18 +385,20 @@ end
 % Right-hand side of Wong-Zakai ODE
 % ================================================================
 
-function f = rhsWZ(t,X,lambda,mu,sigma,...
+function f = rhsWZ(t,X,lambda,beta,...
                    xiEndpoint,xiBridge,K,T)
 
-    dWKdt = xiEndpoint/sqrt(T);
+    % dWKdt = xiEndpoint/sqrt(T);
+    % 
+    % for k = 1:K
+    %     dWKdt = dWKdt ...
+    %         + sqrt(2/T)*xiBridge(k)*cos(k*pi*t/T);
+    % end
 
-    for k = 1:K
-        dWKdt = dWKdt ...
-            + sqrt(2/T)*xiBridge(k)*cos(k*pi*t/T);
-    end
-
-    f = lambda*(mu-X) + sigma*dWKdt;
-
+    C_t = cos(pi/T * t * (1:K-1));
+    dWKdt = xiEndpoint/sqrt(T) + sqrt(2/T)*C_t * xiBridge';
+    
+    f = lambda*X.*(1-X)-0.5*beta*X + beta*X*dWKdt;
 end
 
 % function dWKdt = dWZdt(t,T,xiEndpoint,xiBridge,K)
