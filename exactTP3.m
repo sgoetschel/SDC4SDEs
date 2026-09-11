@@ -20,7 +20,7 @@ function [sol] = exactTP3(~, ~, t_begin, t_end, step_size, X0, eta)
     I = cumtrapz(t,integrand);
 
     % Analytical solution evaluated numerically
-    sol = X0 * exp(W + t/2) ./ (1 + X0*I);
+    sol = X0 * integrand ./ (1 + X0*I);
 
     % figure;
     % plot(t,sol,'LineWidth',1.5);
