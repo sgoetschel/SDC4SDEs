@@ -1,5 +1,5 @@
 %% This function chooses between EM, Milstein and SDC method
-function [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit, m, solRefAll)
+function [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit, m, solRefAll, useSBB, solRefFinestAll)
 time = t_begin:step_size:t_end;
 nTime = intervals + 1;
 NNCurrent = (t_end-t_begin) / step_size;
@@ -27,7 +27,8 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         etaCurrSteps = zeros(nComponents, nTime);
         eta0 = zeros(nComponents, nTime);
         xi_l = zeros(nComponents, m-1, intervals);
-        
+        solRefInterval = zeros(nComponents, intervals, downsampleFactor+1);
+        solRefEndPoints = zeros(nComponents, nTime);
         
         for l=1:realIter
             for k=1:nComponents
@@ -35,24 +36,38 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
                 etaCurrSteps(k,:) = etaMat(1:downsampleFactor:end);
                 eta0(k,2:end) = etaCurrSteps(k,2:end)-etaCurrSteps(k,1:end-1); % first is unused in SBB
                
-                %xi_l(k,:,:) = xi{k}(l,:,downsampleFactor:downsampleFactor:end); % this takes arbitrary coefficients, but we want to approximate a given Brownian motion
+                xi_l(k,:,:) = xi{k}(l,:,downsampleFactor:downsampleFactor:end); % this takes arbitrary coefficients, but we want to approximate a given Brownian motion
                 if m > 1
+                    localInitialValue = initial;
+                    solRefEndPoints(k,1) = initial;
                     for ii=1:intervals
                         leftidx = (ii-1)*downsampleFactor+1;
                         rightidx = ii*downsampleFactor;
                         dW = etaMat(leftidx:rightidx) - [0 etaMat(leftidx:rightidx-1)];
                         nvec = (0:downsampleFactor-1)';
-                        C = cos(pi/downsampleFactor * nvec * (1:m-1)');
-                        xi_l(k,:,ii) = (sqrt(2/time(ii+1)) * C' * dW')';
-    
+                        C = cos(pi/downsampleFactor * nvec * (1:m-1));
+                        xi_l(k,:,ii) = (sqrt(2/(time(ii+1)-time(ii))) * C' * dW')';
+
                         % % debug: reconstruct Brownian motion from KL
                         % % on full subsampled interval; Correct
                         % % Reconstruction matrix
-                        % t_subinterval = linspace(time(ii), time(ii+1), downsampleFactor+1);
-                        % Smat = sin(pi * ((t_subinterval'-time(ii))/(time(ii+1)-time(ii))) * (1:m-1)');
-                        % % Brownian-bridge coefficients
-                        % a = sqrt(2*time(ii+1)) ./ (pi*(1:m-1)) .* xi_l(k,:,ii);
-                        % W_K = etaCurrSteps(k,ii) + ((t_subinterval-time(ii))/(time(ii+1)-time(ii))).*eta0(k,ii+1) + (Smat(:,1:m-1)*a(:,1:m-1)')'; 
+                        t_subinterval = linspace(time(ii), time(ii+1), downsampleFactor+1);
+                        Smat = sin(pi * ((t_subinterval'-time(ii))/(time(ii+1)-time(ii))) * (1:m-1));
+                        %C_t = cos(pi * ((t_subinterval')/(time(ii+1))) * (1:m-1)');
+                        % Brownian-bridge coefficients
+                        a = sqrt(2*(time(ii+1)-time(ii))) ./ (pi*(1:m-1)) .* xi_l(k,:,ii);
+                        W_K = etaCurrSteps(k,ii) + ((t_subinterval-time(ii))/(time(ii+1)-time(ii))).*eta0(k,ii+1) + (Smat(:,1:m-1)*a(:,1:m-1)')'; 
+
+                        if useSBB == true
+                            % compute reference solution using local KL expansion
+                            % xi_l contains the local coefficients
+                            % now compute the bridge
+                            localdt = (time(ii+1)-time(ii))/downsampleFactor;
+                            %bbM = eta0(k,ii+1)./(time(ii+1)-time(ii)) + (sqrt(2/time(ii+1))*C_t * xi_l(k,:,ii)')';
+                            solRefInterval(k,ii,:) = exact(lambda, beta, time(ii), time(ii+1), localdt, localInitialValue, W_K);
+                            localInitialValue = solRefInterval(k, ii, end);
+                            solRefEndPoints(k, ii+1) = localInitialValue;
+                        end
                     end
                 end
             end
@@ -76,7 +91,7 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB_NEW(parameters, initial(), S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
+            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB_NEW(parameters, initial, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
@@ -134,17 +149,21 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
 %                 solRef = solAppro;
 
                % step_size = steps;
-              if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
+              if strcmp(d, 'Mattingly')
                 solRef= 0;
               else
-               solRef = solRefAll(:,:,l);
+                % if useSBB == true
+                    % solRef = solRefEndPoints;
+                % else
+                    solRef = solRefAll(:,:,l);
+                % end
               end
   %          end
             
             %adding values of each realization realIter
             %preperatory work for determining the expected solution
             sumSol = sumSol + solSDC;
-            if strcmp(d, 'OU') || strcmp(d, 'Mattingly')
+            if strcmp(d, 'Mattingly')
               sumSolT2 = sumSolT2 + solSDC(:,end).*solSDC(:,end);
             end
             sumSolRef = sumSolRef + solRef;
@@ -196,21 +215,21 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         
         %calculate weak, strong, L2-error and absolute error criterion for SDC method
         
-        if strcmp(d, 'OU')
-          solEx = sol(:,end);
-          sumSolT2 = sumSolT2 / realIter;
-          refEx= exp(-t_end);
-          refEx2 = 0.5*(1+exp(-2*t_end));
-          errWeak = abs(solEx-refEx);   %weak convergence, test function phi = x
-          errL2 = abs(sumSolT2-refEx2); %weak convergence, test function phi = x^2
-          errStrong = NaN;
-          errT = NaN;
-        else          
+        % if strcmp(d, 'OU')
+        %   solEx = sol(:,end);
+        %   sumSolT2 = sumSolT2 / realIter;
+        %   refEx= exp(-t_end);
+        %   refEx2 = 0.5*(1+exp(-2*t_end));
+        %   errWeak = abs(solEx-refEx);   %weak convergence, test function phi = x
+        %   errL2 = abs(sumSolT2-refEx2); %weak convergence, test function phi = x^2
+        %   errStrong = NaN;
+        %   errT = NaN;
+        % else          
           errWeak = max(abs(sol-solExactRef),[],2);
           errStrong = (diffSol(:,end)./realIter);
           errL2 = (diff/realIter).^0.5;
           errT = abs(sol(:,end)-solExactRef(:,end));
-        end
+        % end
         
 
 

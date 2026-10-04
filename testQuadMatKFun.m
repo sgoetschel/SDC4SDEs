@@ -31,8 +31,8 @@
 clear; clc; close all;
 
 %% ------------------------- CONFIG --------------------------------------
-t0        = 0;
-t1        = 0.1; %2*pi;
+t0        = 1;
+t1        = 2; %2*pi;
 intervals = 1;
 step_size = (t1 - t0)/intervals;
 nnodes     = 4;                
@@ -106,8 +106,8 @@ for k = K_TEST_LIST
     % Sanity check using actual sampled functions (not just isolated basis
     % columns): Q*g(nodes) should match a direct high-accuracy quadrature of
     % g(t)*cos(k*pi*t/L), for g NOT necessarily equal to the cosine itself.
-    testFcns = {@(x) exp(0.2*x), @(x) sin(3*x+0.4), @(x) x.^2 - x + 1};
-    names    = {'exp(0.2t)', 'sin(3t+0.4)', 't^2-t+1'};
+    testFcns = {@(x) exp(0.2*x), @(x) sin(3*x+0.4), @(x) x.^2 - x + 1, @(x) x.^5};
+    names    = {'exp(0.2t)', 'sin(3t+0.4)', 't^2-t+1', 't^5'};
     for m = 1:numel(testFcns)
         fh = testFcns{m};
         g  = fh(t);

@@ -1,7 +1,6 @@
 close all
 clear all
 % %%problem definition
-% %d = 'const';
 % %d = 'exp';
 % %d = 'TP2';
 % %d = 'TP3';
@@ -52,14 +51,11 @@ clear all
 % %exact/ref solution using SBB-ODE
 % %SBB = true;
 % 
-% %starts with 2 intervals and has to be a multiple of 2
+% % time steps
 % %steps = [1, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625];%, 0.0078125, 0.0078125/2];
 % 
 % % variables:(probDef, sde_solver, nodes,  strInit,  colpoints, maxIter, steps, NNfinest, realIter, m, plot_Sol, plot_error, SBB_ODE)            
 
-
-%% const 
-% problem const is not working properly!!!
 
 %% TP 3 - 4 different initializations, and EM and Milstein
 %fprintf(1, '\n problem: TP3 with lambda=1, beta=1 using EulerSBBInit; SDC with eulerSBBInit \n');
@@ -74,15 +70,16 @@ clear all
 warning('off','MATLAB:MKDIR:DirectoryExists');
 diary myLogFile
 maxSweeps = 100;
-nSamples = 1e4;
-for deltaT = [1/2; 1/4; 1/8; 1/16] %; 1/32; 1/64; 1/128] %; 1/256; 1/512]
-  for n=[7] % collocation points
-    for m=[2] % Brownian Bridge terms
+nSamples = 10;
+NNfinest = 16*8192;
+for deltaT = [1/2; 1/4; 1/8; 1/16; 1/32; 1/64]; %1/128; 1/256; 1/512; 1/1024]
+  for n=[4] % collocation points
+    for m=[4096] % Brownian Bridge terms
       %fprintf("\n\n=====================================================================================================\n");
       %fprintf(" n = %d, m = %d\n", n, m);
       
-      %           (    d,  sde_solver,      nodes,       strInit, colpoints,  maxSweeps,  steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
-      main_SDCSDEs('TP3',    'SDC_BB',   'lobatto', 'constInit',        n, maxSweeps, deltaT,     1024, nSamples,   m,    true,      false, false);
+      %           (    d,  sde_solver,      nodes,       strInit, colpoints,  maxSweeps,  steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, useSBB)
+      main_SDCSDEs('OU',    'SDC_BB',   'lobatto', 'constInit',        n, maxSweeps, deltaT,     NNfinest, nSamples,   m,    false,      false, false);
       %fprintf("\n\n=====================================================================================================\n");
     end
   end

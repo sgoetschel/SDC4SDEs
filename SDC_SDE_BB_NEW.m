@@ -20,7 +20,7 @@
 % nBridgeTerms - number of terms in the bridge
 % tol - stopping tolerance: stop sweeps if correction norm < tol
 
-function [ sol, countRhsEvaluations, correctionNorms ] = SDC_SDE_BB_NEW( parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
+function [ sol, countRhsEvaluations, correctionNorms, solAtTimesteps ] = SDC_SDE_BB_NEW( parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
 
 col_points = parameters(1);
 intervals = parameters(2);
@@ -39,6 +39,8 @@ end
 % initial values needed for SDC method
 d = zeros(nComponents, points);
 sol = zeros(nComponents, (points-1)*intervals+1);
+solAtTimesteps = zeros(nComponents, intervals+1);
+solAtTimesteps(:,1) = initialValue;
 
 % initial value of SDE
 y0 = initialValue;
@@ -70,7 +72,7 @@ for i=1:intervals
     
     %compute derivative B0 Brownian Bridge term -> per definition
     %eta/sqrt(deltaT), with eta ~N(0,1)
-    db0 = eta(:,i+1)/sqrt(deltaT); 
+    db0 = eta(:,i+1)/sqrt(deltaT);  %eta already contains the increment dW
     
     t_currInt = col_nodes(t_begin,t_begin+deltaT,col_points,nodes);
     
@@ -165,7 +167,14 @@ for i=1:intervals
     
     %maximum number of sweeps
     for j=1:max_sweeps
-        
+
+        % stoch_rhs_integrate_bm_all = zeros(nComponents, points-1);
+        % 
+        % stoch_rhs_all = stochRhs{n}(phi);
+        % for y=1:nComponents
+        %     stoch_rhs_integrate_bm_all(y,:) = filon_cos_nodes(t_currInt-t_currInt(1), stoch_rhs_all(y,:), deltaT, squeeze(xi(y,:,i)));
+        % end
+
         % SDC scheme for integration over all collocation points
         for p=2:points
             
@@ -180,14 +189,14 @@ for i=1:intervals
             stoch_rhs_integrate_b0 = zeros(nComponents, 1);
             stoch_rhs_integrate_bm = zeros(nComponents, 1);
             stoch_rhs_diff = zeros(nComponents, 1);
-            for n=1:size(beta,2)
+            for n=1:size(beta,2)  % noise components (number of Wiener processes)
                 %terms for stoch spectral integration
                 stoch_rhs = stochRhs{n}(phi);
                 stoch_rhs_err = stochRhs{n}( phi(:,p-1)+d(:, p-1) );
                 stoch_rhs_prev = stoch_rhs(:,p-1);
                 countRhsEvaluations = countRhsEvaluations + 2;
                 
-                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0(n)*(S(p-1,:)*stoch_rhs')';
+                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0*(S(p-1,:)*stoch_rhs')';
                 if (nBridgeTerms>1)
                     % loop over expansion terms: sum_1^m {xi_k * Q_k}
                     % include random variables xi as in the Karhunen-Loeve expansion
@@ -196,25 +205,34 @@ for i=1:intervals
                     %    Q = Q + quadMatK_c(p-1,:, l).*xi(:,l,i);
                     %end
                     
+                    %C_t = cos(pi/deltaT * (t_currInt-t_currInt(1))' * (1:nBridgeTerms-1));
+
                     %Q= sqrt(2/deltaT)*Q;
-                    for y=1:nComponents
+                    for y=1:nComponents  % solution components
                         %stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
-                        stoch_rhs_integrate_bm(y) = 0;
+                        %stoch_rhs_integrate_bm(y) = 0;
                         for l=1:nBridgeTerms-1
                             stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
-                                (quadMatK_c(p-1,:, l)*stoch_rhs(y,:)')'.*xi(:,l,i);
+                                (quadMatK_c(p-1,:, l)*stoch_rhs(y,:)')'.*xi(y,l,i);
+                             % stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
+                             %    (S(p-1,:)*(C_t(p-1,l)*stoch_rhs(y,:)'))'.*xi(y,l,i);
                         end
-                        stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT);
+                        % %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT); %
+                        % % is normalization needed here, or is xi  normalized
+                        % % already?
+                        %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm_all(y,p-1);
                     end
                     % dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
                     % this needs t-t_left, so t_currInt(p-1)-t_currInt(1)
                     dbBridge = dbrownianBridge(deltaT, t_currInt(p-1)-t_currInt(1), xi(:,:,i));
+                    %stoch_rhs_integrate_bm(y) = S(p-1,:) * (dbrownianBridge(deltaT, t_currInt-t_currInt(1), xi(:,:,i)) .* stoch_rhs)';
                 else
                     stoch_rhs_integrate_bm = zeros(nComponents,1);
+                    dbBridge = zeros(nComponents,1);
                 end
                 countRhsEvaluations = countRhsEvaluations + 1;
                 
-                stoch_rhs_diff = stoch_rhs_diff + (db0(n) + dbBridge(n))*(stoch_rhs_err - stoch_rhs_prev);
+                stoch_rhs_diff = stoch_rhs_diff + (db0 + dbBridge)*(stoch_rhs_err - stoch_rhs_prev);
             end %end loop system's order
             
             %correction scheme
@@ -228,7 +246,7 @@ for i=1:intervals
         %solution update
         phi = phi + d;
         
-        correctionNorm = norm(d);
+        correctionNorm = norm(d(:));
         correctionNorms(i,j) = correctionNorm;
 
         if (correctionNorm < tol)
@@ -241,6 +259,7 @@ for i=1:intervals
     % end
     y0 = phi(:,end);
     sol(:,int_begin:int_end) = phi;
+    solAtTimesteps(:,i+1) = phi(end);
     d = zeros(nComponents, points);
     t_begin = t_currInt(end);
     

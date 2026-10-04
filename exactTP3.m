@@ -1,6 +1,6 @@
 %% Stratonovich solution to problem case d='TP3'
 % this represents an approximation of the exact solution
-function [sol] = exactTP3(~, ~, t_begin, t_end, step_size, X0, eta)
+function [sol] = exactTP3(lambda, beta, t_begin, t_end, step_size, X0, eta)
 %Stratonovich-SDE
     % time = t_begin:step_size:t_end;
     % int = 0;
@@ -15,12 +15,16 @@ function [sol] = exactTP3(~, ~, t_begin, t_end, step_size, X0, eta)
     t  = linspace(t_begin,t_end,nsteps+1);
     %W = zeros(1,nsteps+1);
     W = eta;
-    integrand = exp(W+t/2);
+    % integrand = exp(W+t/2);
+    % modification for arbitrary intervals
+    tau = t-t_begin;
+    integrand = exp((lambda-beta/2)*tau+beta*(W-W(1)));
+
     % Cumulative trapezoidal integration
     I = cumtrapz(t,integrand);
 
     % Analytical solution evaluated numerically
-    sol = X0 * integrand ./ (1 + X0*I);
+    sol = X0 * integrand ./ (1 + lambda*X0*I);
 
     % figure;
     % plot(t,sol,'LineWidth',1.5);

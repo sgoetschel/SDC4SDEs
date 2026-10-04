@@ -120,6 +120,10 @@ for kk = 2:nStepsRef+1
     Xpath(:,kk) = m + sqrt(max(v,0)) * dW/sqrt(dt);
 end
 
+% for testing: exactOU function gives the correct result (to be called
+% individually for each realization)
+% exactSol = exactOU([lambda, mu], sigma, tRef(1), tRef(end), dtRef, X0, eta(19,:));
+
 XpathT = Xpath(:,end);
 
 meanRef = mean(XpathT);

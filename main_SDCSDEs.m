@@ -1,7 +1,7 @@
 %% preperation for applying the chosen method
 % generates data files
 % by Lisa Fischer
-function [] = main_SDCSDEs(d, sde_solver, nodes, strInit, colpoints, maxIter, steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, SBB)
+function [] = main_SDCSDEs(d, sde_solver, nodes, strInit, colpoints, maxIter, steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, useSBB)
 
 fprintf('START PROGRAM using the solver: %s \n', sde_solver)
 
@@ -45,8 +45,13 @@ elseif strcmp(d, 'TP4')
     initial = [1; 0];
     nComponents = 2;
 elseif strcmp(d, 'OU')
-    lambda = -0.5;
-    beta = 1.0;
+    lambdaOU = 2.0;
+    muOU     = 1.0;
+    sigmaOU  = 0.5;
+    lambda = [lambdaOU, muOU];
+    beta = sigmaOU;
+    %lambda = -0.5;
+    %beta = 1.0;
     [rhs, stochRhs, J, RhsIto, exact] = problemOU(lambda, beta);
     initial = 0.5;
     nComponents = 1;
@@ -80,11 +85,7 @@ totalTime = 0;
 
 %global solRefFinestAll
 
-if strcmp(d, 'OU') 
-  solRefFinestAll = 0;
-else
-  solRefFinestAll = zeros(nComponents, NNfinest+1, realIter);
-end 
+solRefFinestAll = zeros(nComponents, NNfinest+1, realIter);
 etaFin = zeros(nComponents, NNfinest+1);
 etaFinest = zeros(nComponents, NNfinest+1);
 
@@ -122,14 +123,14 @@ for p=1:length(mBB)
     %save output in folder with name of #Karhunen-Loeve expansion terms,
     %#realizations and finest time grid
     subfolder = sprintf('data_bb_%d_%d_%d', m, realIter, NNfinest);
-    if SBB == true
+    if useSBB == true
       subfolder = sprintf('data_bb_SBB_%d_%d_%d', m, realIter, NNfinest);
     end 
     mkdir(subfolder);
     
-    if strcmp(d, 'OU') 
-      solRefFinestAll = 0;
-      fprintf(1, '\n problem: %s \t no ref sol required' , d);
+    % if strcmp(d, 'OU') 
+    %   solRefFinestAll = 0;
+    %   fprintf(1, '\n problem: %s \t no ref sol required' , d);
 %    elseif strcmp(d, 'TP3')      
 %      allSolRef = cell(1,length(steps));
 %      for n=1:length(steps)
@@ -177,7 +178,7 @@ for p=1:length(mBB)
 %       mean(sv)
 %       var(sv)
 %       return;
-    else
+    % else
     
     %sol of the smooth Brownian Bridge ODE
     % on finest time grid
@@ -191,44 +192,49 @@ for p=1:length(mBB)
         end
         etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
         
-        if SBB == true  % use exact sol with SBB approx or ODE solver for the SBB approximation as reference
-            % bM = zeros(nComponents, NNfinest);
-            % bbM = zeros(nComponents, NNfinest+1);
-            % k=1;
-            % bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
-            % for k=2:NNfinest
-            %     bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
-            % end
-            % bbM(:,:) = [zeros(nComponents,1) bM(:,:)];
-            
-            % one component only
-            dW = etaFin(1,2:end)-etaFin(1,1:end-1);
-            tRef = linspace(t_begin,t_end,NNfinest+1);
-            CosMat = cos(pi/t_end * tRef(1:end-1)' * (1:m-1)); %cos(pi/nStepsRef * n * k);
-            xiSBB = (sqrt(2/t_end) * CosMat' * dW')';
-            SinMat = sin(pi/t_end * tRef' * (1:m-1));
-            BBcoeff_a = sqrt(2*t_end) ./ (pi*(1:m-1)) .* xiSBB;
-            bbM = (tRef/t_end).*etaFin(k,end) + (SinMat*BBcoeff_a')'; 
-
-            solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, bbM);
-              %ref sol using matlab ode solver  
-%                 y0 = initial;
-%                 tsolAppro = t_begin;
-%                 solAppro = initial;
-%                 for k=1:NNfinest
-%                     %[tsol, solA] = ode45(@(s,x)SBB_ODE_TP3(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
-%                     [tsol, solA] = ode45(@(s,x)SBB_ODE_exp(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta, k),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
-%                     y0 = solA(end,:);
-%                     tsolAppro = [tsolAppro tsol(end)'];
-%                     solAppro = [solAppro solA(end)'];
-%                 end
-%                 solRefFinestAll(:,:,l) = solAppro;
-        else
+%         if useSBB == true  % use exact sol with SBB approx or ODE solver for the SBB approximation as reference
+%             % bM = zeros(nComponents, NNfinest);
+%             % bbM = zeros(nComponents, NNfinest+1);
+%             % k=1;
+%             % bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
+%             % for k=2:NNfinest
+%             %     bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
+%             % end
+%             % bbM(:,:) = [zeros(nComponents,1) bM(:,:)];
+% 
+%             % one component only
+%             dW = etaFin(1,2:end)-etaFin(1,1:end-1);
+%             tRef = linspace(t_begin,t_end,NNfinest+1);
+%             CosMat = cos(pi/t_end * tRef(1:end-1)' * (1:m-1)); %cos(pi/nStepsRef * n * k);
+%             xiSBB = (sqrt(2/t_end) * CosMat' * dW')';
+%             SinMat = sin(pi/t_end * tRef' * (1:m-1));
+%             BBcoeff_a = sqrt(2*t_end) ./ (pi*(1:m-1)) .* xiSBB;
+%             bbM = (tRef/t_end).*etaFin(k,end) + (SinMat*BBcoeff_a')'; 
+%             % bbm here is then just the approx of Browian motion globally
+%             % with M modes. This does not refine when time steps are
+%             % reduced in a time convergence study. Have to compute the
+%             % reference during that study with local coefficients
+% 
+%             solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, bbM);
+%               %ref sol using matlab ode solver  
+% %                 y0 = initial;
+% %                 tsolAppro = t_begin;
+% %                 solAppro = initial;
+% %                 for k=1:NNfinest
+% %                     %[tsol, solA] = ode45(@(s,x)SBB_ODE_TP3(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
+% %                     [tsol, solA] = ode45(@(s,x)SBB_ODE_exp(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta, k),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
+% %                     y0 = solA(end,:);
+% %                     tsolAppro = [tsolAppro tsol(end)'];
+% %                     solAppro = [solAppro solA(end)'];
+% %                 end
+% %                 solRefFinestAll(:,:,l) = solAppro;
+%         else
+            % this is the solution to the sample Brownian motion
             solRefFinestAll(:,:,l) = exact(lambda, beta, t_begin, t_end, stepsFinest, initial, etaFin);
-        end
+        % end
         
     end
-    end
+    % end
     
     
     %loop over all collocation points
@@ -250,8 +256,8 @@ for p=1:length(mBB)
             fprintf(1, '\nstep size: %d\t intervals: %d', steps(n), intervals);
             
             %global solRef
-            if strcmp(d, 'OU')
-              solRef = 0;
+            % if strcmp(d, 'OU')
+              % solRef = 0;
 %             elseif strcmp(d, 'TP3')
 % 
 % %               if k == 1            
@@ -266,15 +272,15 @@ for p=1:length(mBB)
 % %               end
 %               solRef = zeros(order, intervals+1, realIter);
 % %               solRef(:,:,:) = allSolRef{n}(:,:,:);
-            else
+            % else
               solRef = zeros(nComponents, intervals+1, realIter);
               solRef(:,:,:) = solRefFinestAll(:,1:NNfinest/intervals:end,:);                
-            end
+            % end
             
             nameDat = sprintf('%s_%s_%d_%s_%s_%d%d_%d_%d_%d_%d', sde_solver, d, col_points, nodes(1:2), strInit(1:6), t_begin, t_end, realIter, NNfinest, m, max_iter);
             
             %function call to compute EM, Milstein or SDC approximation
-            [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit,m, solRef);
+            [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit,m, solRef, useSBB, solRefFinestAll);
             totalTime = totalTime + compTime;
 
             %preparation for output saving
@@ -321,17 +327,18 @@ for p=1:length(mBB)
           fprintf( '%1.6e \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f \t %1.6e \t %1.2f  \n', steps(i), errStr(1,i), eocStr(i), errW(1,i), eocWeak(i), errorL2(1,i), eocL2(i), errorT(1,i), eocT(i));
         end
         
+        expectedOrder = colpoints-1;
         fit = polyfit(log(steps), log(errStr), 1);
         strongOrder=fit(1);
         errC = errStr(1) / steps(1)^strongOrder;
-        strongErr_fit = errC * steps .^ strongOrder;
-        strongTxt = sprintf('Estimated strong order: %.2f\n',strongOrder);
+        strongErr_fit = errC * steps .^ expectedOrder;
+        strongTxt = sprintf('Estimated strong order: %.2f (expected: %.2f)\n',strongOrder, expectedOrder);
 
         fit = polyfit(log(steps), log(errW), 1);
         weakOrder = fit(1);
         errC = errW(1) / steps(1)^weakOrder;
-        weakErr_fit = errC * steps.^weakOrder;
-        weakTxt = sprintf('Estimated weak order: %.2f\n',weakOrder);
+        weakErr_fit = errC * steps.^expectedOrder;
+        weakTxt = sprintf('Estimated weak order: %.2f (expected: %.2f)\n',weakOrder, expectedOrder);
 
 
         fprintf('Estimated convergence orders:\n   - strong %.3f\n   -  weak %.3f\n', strongOrder, weakOrder);

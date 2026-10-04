@@ -1,11 +1,11 @@
-function[rhs, stochRhs, J, RhsIto, exact] = problemOU(lambdaVec, beta)
+function[rhs, stochRhs, J, RhsIto, exact] = problemOU(lambdaVec, sigma)
 
 % lambdaVec = [lambda, mu]
 lambda = lambdaVec(1);
 mu = lambdaVec(2);
 
 rhs =@(x)lambda*(mu-x);
-stochRhs ={@(x) beta*ones(1,length(x))};
+stochRhs ={@(x) sigma*ones(1,length(x))};
 J = {@(x) 0};
 RhsIto =@(x) lambda*(mu-x);
 
