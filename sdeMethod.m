@@ -1,5 +1,8 @@
-%% This function chooses between EM, Milstein and SDC method
+%% This runs EM, Milstein or the SDC method
+% by Lisa Fischer, Sebastian Goetschel
+
 function [errWeak, errStrong, errL2, errT, compTime, countRhsEvaluations] = sdeMethod(sde_solver, tol, NNfinest, step_size, t_begin, t_end, intervals, col_points, max_iter, realIter, initial, nodes, lambda, beta, rhs, stochRhs, RhsIto, J, nComponents, eta, exact, d, xi, plot_Error, plot_Sol, strInit, m, solRefAll, useSBB, solRefFinestAll)
+
 time = t_begin:step_size:t_end;
 nTime = intervals + 1;
 NNCurrent = (t_end-t_begin) / step_size;
@@ -8,7 +11,7 @@ countRhsEvaluations = 0;
 skippedRealizations = 0; % to catch if SDC does not converge for certain random variables
 
 %% choose SDC method
-if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the cleaned up version
+if strcmp(sde_solver,'SDC_BB') 
     
     parameters = [col_points, intervals, max_iter, t_begin, t_end];
     
@@ -73,16 +76,12 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
             end
             eta0 = sqrt(1/step_size)*eta0;
             % eta0 now has variance 1 (before: variance deltaT)
-
-            %global thisRealization;
-            thisRealization = l;
             
             if(m>1)
                 %compute quadrature matrix for each expansion term
                 [quadMatK_c] = quadMatKFun(t, step_size, nodes, m-1);
             else
                 quadMatK_c = 0;
-                %quadMatK_s = 0;
             end
                                 
             %dW approximation; this is just used in the Euler for Ito
@@ -91,7 +90,7 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB_NEW(parameters, initial, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
+            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB(parameters, initial, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
@@ -100,72 +99,11 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
                 continue;
             end
             solSDC =  solSDCfull(:,1:col_points-1:end);
-            
-            %exact solution at macro time steps
-%             if strcmp(d, 'TP3')
-%                 steps = step_size;
-%                 step_size = 1/NNfinest;
-%                 etaCurr = [0 etaMat];
-%                 solRef = exact(lambda, beta, t_begin, t_end, step_size, initial, etaCurr);
-%                 solRef = solRef(1:NNfinest/NNCurrent:end);
-%                 step_size = steps;
-%                 
-%             else
-%                steps = step_size;
-%                 %sol of the Stratonovich SDE
-%                 etaCurr = [0 etaMat];
-%                 solRef = exact(lambda, beta, t_begin, t_end, 1/NNfinest, initial, etaCurr);
-%                 solRef = solRef(1:NNfinest/NNCurrent:end);
-                
-                %sol of the smooth Brownian Bridge ODE
-                % on finest time grid
-%                 steps = 1.0/NNfinest;
-%                 for k=1:order
-%                 etaFin(k,:) = [0 etaMat];
-%                 etaFinest(k,:) = etaFin(k,1:end)- [0, etaFin(k,1:end-1)];
-%                 end
-%                 etaFinest = sqrt(1/steps)*etaFinest;
-%                 k=1;
-%                 bM(:,k) = brownianBridge(etaFinest(:,k+1), steps , steps, xiFinest);
-%                 for k=2:NNfinest
-%                    bM(:,k) =  brownianBridge(etaFinest(:,k+1), steps , steps, xiFinest)+bM(:,k-1);
-%                 end
-% 
-%                   bbM(:,:) = [zeros(order,1) bM(:,:)];
-%                   solRef = exactExp_BB(lambda, beta, t_begin, t_end, steps, initial, bbM);
-%                   solRef = solRef(1:NNfinest/NNCurrent:end);
-               
-                               
-%               %ref sol using matlab ode solver  
-%                 y0 = initial;
-%                 tsolAppro = [t_begin];
-%                 solAppro = [initial];
-%                 for k=1:intervals
-%                     [tsol, solA] = ode45(@(s,x)SBB_ODE(s,x, eta0(:,k+1), steps, xi_l(:,:,k), lambda, beta),[t_begin+(k-1)*steps t_begin+k*steps], y0');
-%                     y0 = solA(end,:);
-%                     tsolAppro = [tsolAppro tsol(end)'];
-%                     solAppro = [solAppro solA(end)'];
-%                 end
-%                 solRef = solAppro;
+            solRef = solRefAll(:,:,l);
 
-               % step_size = steps;
-              if strcmp(d, 'Mattingly')
-                solRef= 0;
-              else
-                % if useSBB == true
-                    % solRef = solRefEndPoints;
-                % else
-                    solRef = solRefAll(:,:,l);
-                % end
-              end
-  %          end
-            
-            %adding values of each realization realIter
-            %preperatory work for determining the expected solution
+            % adding values of each realization realIter
+            % preperatory work for determining the expected solution
             sumSol = sumSol + solSDC;
-            if strcmp(d, 'Mattingly')
-              sumSolT2 = sumSolT2 + solSDC(:,end).*solSDC(:,end);
-            end
             sumSolRef = sumSolRef + solRef;
             
             %preparatory work for computation of different error definitions
@@ -180,30 +118,6 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         sol= sumSol/(realIter-skippedRealizations);
         solExactRef = sumSolRef/(realIter-skippedRealizations);
         
-%         if strcmp(d, 'TP3') % compute reference solution new with sample paths
-%           nstepsRef = 1000;
-%           refdt = step_size/nstepsRef;
-%           solsRef = zeros(realIter,1);
-%           reft = refdt:refdt:step_size;
-%           for l=1:realIter
-%             refWt = cumsum(randn(1,nstepsRef)).*sqrt(refdt); 
-%             %delta=refWt(nstepsRef-1)-step_size/2; %?
-%             %refWt=refWt-delta*reft/refdt;
-%             int_term=refdt/2*exp(0.5)+refdt*cumsum(exp(0.5*reft+refWt)) -refdt/2*exp(0.5*reft(end)+refWt(end));
-%             refXt = exp(0.5*reft+refWt)./(2+int_term);                        
-%             solsRef(l)=refXt(end); 
-% %             figure(1);
-% %             hold on;
-% %             plot(reft, refWt);
-% %             figure(2);
-% %             hold on;
-% %             plot(reft,refXt);
-%           end
-%         end
-        
-%         figure(3);
-%         hist(solsRef,20);
-        
         solsRef = squeeze(solRefAll(1,end,:));
         fprintf("\n at final time:");
         fprintf("\n mean reference \t mean SDC \t err mean \t var reference \t var SDC \t err var\n");
@@ -214,24 +128,12 @@ if strcmp(sde_solver,'SDC_BB') % takes the _NEW.m method now, which is the clean
         fprintf("---------------------------------------------------------------------------------------------------\n\n");
         
         %calculate weak, strong, L2-error and absolute error criterion for SDC method
+      
+        errWeak = max(abs(sol-solExactRef),[],2);
+        errStrong = (diffSol(:,end)./realIter);
+        errL2 = (diff/realIter).^0.5;
+        errT = abs(sol(:,end)-solExactRef(:,end));
         
-        % if strcmp(d, 'OU')
-        %   solEx = sol(:,end);
-        %   sumSolT2 = sumSolT2 / realIter;
-        %   refEx= exp(-t_end);
-        %   refEx2 = 0.5*(1+exp(-2*t_end));
-        %   errWeak = abs(solEx-refEx);   %weak convergence, test function phi = x
-        %   errL2 = abs(sumSolT2-refEx2); %weak convergence, test function phi = x^2
-        %   errStrong = NaN;
-        %   errT = NaN;
-        % else          
-          errWeak = max(abs(sol-solExactRef),[],2);
-          errStrong = (diffSol(:,end)./realIter);
-          errL2 = (diff/realIter).^0.5;
-          errT = abs(sol(:,end)-solExactRef(:,end));
-        % end
-        
-
 
         
 elseif strcmp(sde_solver,'SDC_BB_impl')

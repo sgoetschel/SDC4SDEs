@@ -1,5 +1,6 @@
 %% sequential Spectral Deferred Correction Method
 % using the explicit Euler scheme
+% by Lisa Fischer, Sebastian Goetschel
 
 % parameters - number of collocation points, intervals, max sweeps
 % initialValue - initial value for SDE
@@ -20,7 +21,7 @@
 % nBridgeTerms - number of terms in the bridge
 % tol - stopping tolerance: stop sweeps if correction norm < tol
 
-function [ sol, countRhsEvaluations, correctionNorms, solAtTimesteps ] = SDC_SDE_BB_NEW( parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
+function [ sol, countRhsEvaluations, correctionNorms, solAtTimesteps ] = SDC_SDE_BB(parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
 
 col_points = parameters(1);
 intervals = parameters(2);
