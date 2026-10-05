@@ -1,11 +1,31 @@
 %% sequential Spectral Deferred Correction Method
 % using the explicit Euler scheme
+% by Lisa Fischer, Sebastian Goetschel
 
-function [ sol, countRhsEvaluations ] = SDC_SDE_BB( parameters, initial, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, order, xi, strInit, m, tol)
+% parameters - number of collocation points, intervals, max sweeps
+% initialValue - initial value for SDE
+% S - quadrature matrix
+% quadMatK_c - quadrature matrix for the cosines times monomial
+% t - time intervals (Wiener process sampled at these time steps)
+% deltaT - time step size
+% nodes - string specifying type of collocation nodes
+% beta - coefficients for stochastic part (length = # independent Wiener processes)
+% rhs_eval - count evaluations of rhs (drift and diffusion)
+% stochRhs - function handle for the diffusion part
+% eta - random variables specifying the bridge
+% deltaW - increments of the Wiener process
+% RhsIto - drift term in Ito formulation (for some initialization method)
+% nComponents - dimension of the system (number of unknowns)
+% xi - random variables specifying the bridge
+% strInit - string specifying type of intialization
+% nBridgeTerms - number of terms in the bridge
+% tol - stopping tolerance: stop sweeps if correction norm < tol
+
+function [ sol, countRhsEvaluations, correctionNorms, solAtTimesteps ] = SDC_SDE_BB(parameters, initialValue, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi, strInit, nBridgeTerms, tol)
 
 col_points = parameters(1);
 intervals = parameters(2);
-max_iter = parameters(3);
+max_sweeps = parameters(3);
 
 
 %initials & placeholders needed for implementation
@@ -18,19 +38,32 @@ else
 end
 
 % initial values needed for SDC method
-d = zeros(order, points);
-sol = zeros(order, (points-1)*intervals+1);
+d = zeros(nComponents, points);
+sol = zeros(nComponents, (points-1)*intervals+1);
+solAtTimesteps = zeros(nComponents, intervals+1);
+solAtTimesteps(:,1) = initialValue;
 
 % initial value of SDE
-y0 = initial;
+y0 = initialValue;
 
 correctionNorm=-1;
 countRhsEvaluations = 0;
+correctionNorms = zeros(intervals, max_sweeps);
 
 t_begin = t(1);
 %for each sub time interval
 for i=1:intervals
     %fprintf('\n %d interval of %d \n', i, intervals)
+
+    % % debug: recompute integration matrices per interval
+    % S_pre = S;
+    % quadMatK_c_pre = quadMatK_c;
+    % t_pre = t;
+    % [S, t, ~] = computeSpecMat(t_begin, t_begin+deltaT, deltaT, 1, col_points, nodes);
+    % if(nBridgeTerms>1)
+    %     %compute quadrature matrix for each expansion term
+    %     [quadMatK_c] = quadMatKFun(t, deltaT, nodes, nBridgeTerms-1);
+    % end
     
     %draw samples for more than one Karhunen-Loeve expansion term
     %xi = randn(order,m-1);
@@ -40,39 +73,25 @@ for i=1:intervals
     
     %compute derivative B0 Brownian Bridge term -> per definition
     %eta/sqrt(deltaT), with eta ~N(0,1)
-    db0 = eta(:,i+1)/sqrt(deltaT); 
+    db0 = eta(:,i+1)/sqrt(deltaT);  %eta already contains the increment dW
     
     t_currInt = col_nodes(t_begin,t_begin+deltaT,col_points,nodes);
     
     %choose the different possible initializations
-    if strcmp(strInit, 'exactInit')
-        phi = zeros(order, points);
-        global solRef thisRealization
-        for k=1:points
-          for n=1:order
-              phi(n, k) = y0(n)+(solRef(n,i+1,thisRealization)-y0(n))*t(k)/deltaT;
-          end
-        end
-        
-        if(m>1)
-            %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
-        else
-            dbBridge = zeros(order,1);
-        end
-        %Brownian bridge
-        countRhsEvaluations = countRhsEvaluations + 1;
-    elseif strcmp(strInit, 'constInit')
-        phi = zeros(order, points);
-        for n=1:order
+    if strcmp(strInit, 'constInit')
+        phi = zeros(nComponents, points);
+        for n=1:nComponents
             phi(n, :) = ones(1,points)*y0(n);
         end
         
-        if(m>1)
+        if(nBridgeTerms>1)
             %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+
+            % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+            %dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            dbBridge = dbrownianBridge(deltaT, t_currInt(1)-t_currInt(1), xi(:,:,i));
         else
-            dbBridge = zeros(order,1);
+            dbBridge = zeros(nComponents,1);
         end
         %Brownian bridge
         countRhsEvaluations = countRhsEvaluations + 1;
@@ -88,16 +107,18 @@ for i=1:intervals
         countRhsEvaluations = countRhsEvaluations + 1;
         
         for k=2:points
-            if(m>1)
-                dbBridge = dbrownianBridge(deltaT, t_currInt(k-1), xi(:,:,i));
+            if(nBridgeTerms>1)
+                %dbBridge = dbrownianBridge(deltaT, t_currInt(k-1), xi(:,:,i));
+                % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+                dbBridge = dbrownianBridge(deltaT, t_currInt(k-1)-t_currInt(1), xi(:,:,i));
             else
-                dbBridge = zeros(order,1);
+                dbBridge = zeros(nComponents,1);
             end
             %Brownian bridge
             countRhsEvaluations = countRhsEvaluations + 1;
             
             %stoch part
-            stoch_part = zeros(order,1);
+            stoch_part = zeros(nComponents,1);
             for n=1:size(beta,2)
                 stoch_part = stoch_part + stochRhs{n}(phi(:,k-1)).*(db0(n) + dbBridge(n));
                 %rhs stoch fct evals
@@ -109,60 +130,6 @@ for i=1:intervals
             %rhs_phi fct evals
             countRhsEvaluations = countRhsEvaluations + 1;
         end
-        %%%WORKS ONLY FOR TP2!!!
-    elseif strcmp(strInit, 'implDampNM_eMItoSDE')
-        %implicit EM Ito SDE appl linear interpolation and damped Newton's method
-        % set initial value for current time interval
-        phi= y0;
-        rhs_phi = RhsIto(phi);
-        %rhs_phi fct evals
-        countRhsEvaluations = countRhsEvaluations + 1;
-        
-        %stoch part
-        stoch_part = zeros(order,1);
-        for n=1:size(beta,2)
-            stoch_part = stoch_part + stochRhs{n}(phi(:,1))*deltaW(n,i);
-            %rhs_stoch fct evals
-            countRhsEvaluations = countRhsEvaluations + 1;
-        end
-        
-        %damped Newton's method for implicit Euler-Maruyama method
-        damping = 1;
-        phi_end = y0;
-        delta_phi = -(phi_end - rhs_phi*deltaT-y0-stoch_part)/(1-(3*phi_end*phi_end-1)*deltaT);
-        niter = 0;
-        while abs(delta_phi)>1e-5 && niter < 10
-            phi_end_new = phi_end + damping*delta_phi;
-            rhs_phi = RhsIto(phi_end_new);
-            countRhsEvaluations = countRhsEvaluations + 1;
-            delta_phi_s = -(phi_end_new - rhs_phi*deltaT-y0-stoch_part)/(1-(3*phi_end*phi_end-1)*deltaT);
-            while abs(delta_phi_s)^2 > (1-damping/2)*abs(delta_phi)^2 && damping > 1e-6
-                damping = 0.5*damping;
-                phi_end_new = phi_end + damping*delta_phi;
-                rhs_phi = RhsIto(phi_end_new);
-                countRhsEvaluations = countRhsEvaluations + 1;
-                delta_phi_s = -(phi_end_new - rhs_phi*deltaT-y0-stoch_part)/(1-(3*phi_end*phi_end-1)*deltaT);
-            end
-            damping = min(1,2*damping);
-            phi_end = phi_end_new;
-            delta_phi = -(phi_end - rhs_phi*deltaT-y0-stoch_part)/(1-(3*phi_end*phi_end-1)*deltaT);
-            niter = niter+1;
-        end
-        
-        %linear interpolation for all collocation points
-        for k=2:points
-            phi(:,k) = y0 + (phi_end-y0) *t(k)/deltaT;
-        end
-        
-        if(m>1)
-            %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
-        else
-            dbBridge = zeros(order,1);
-        end
-        %Brownian bridge
-        countRhsEvaluations = countRhsEvaluations + 1;
-        
     else %EM Ito SDE appl linear interpolation
         % set initial value for current time interval
         
@@ -172,7 +139,7 @@ for i=1:intervals
         countRhsEvaluations = countRhsEvaluations + 1;
         
         %stoch part
-        stoch_part = zeros(order,1);
+        stoch_part = zeros(nComponents,1);
         for n=1:size(beta,2)
             stoch_part = stoch_part + stochRhs{n}(phi(:,1))*deltaW(n,i);
             %rhs_stoch fct evals
@@ -186,21 +153,29 @@ for i=1:intervals
             
         end
         
-        if(m>1)
+        if(nBridgeTerms>1)
             %dbBridge = dbrownianBridge(eta(:,i+1), deltaT, 0, xi(:,:,i));
-            dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            % this needs t-t_left, so t_currInt(idx)-t_currInt(1)
+            %dbBridge = dbrownianBridge(deltaT, t_currInt(1), xi(:,:,i));
+            dbBridge = dbrownianBridge(deltaT, t_currInt(1)-t_currInt(1), xi(:,:,i));
         else
-            dbBridge = zeros(order,1);
+            dbBridge = zeros(nComponents,1);
         end
         %Brownian bridge
         countRhsEvaluations = countRhsEvaluations + 1;
-        
     end %choice of initialization
     
     
     %maximum number of sweeps
-    for j=1:max_iter
-        
+    for j=1:max_sweeps
+
+        % stoch_rhs_integrate_bm_all = zeros(nComponents, points-1);
+        % 
+        % stoch_rhs_all = stochRhs{n}(phi);
+        % for y=1:nComponents
+        %     stoch_rhs_integrate_bm_all(y,:) = filon_cos_nodes(t_currInt-t_currInt(1), stoch_rhs_all(y,:), deltaT, squeeze(xi(y,:,i)));
+        % end
+
         % SDC scheme for integration over all collocation points
         for p=2:points
             
@@ -212,36 +187,53 @@ for i=1:intervals
             countRhsEvaluations = countRhsEvaluations + 2;
             
             %stoch part
-            stoch_rhs_integrate_b0 = zeros(order, 1);
-            stoch_rhs_integrate_bm = zeros(order, 1);
-            stoch_rhs_diff = zeros(order, 1);
-            for n=1:size(beta,2)
+            stoch_rhs_integrate_b0 = zeros(nComponents, 1);
+            stoch_rhs_integrate_bm = zeros(nComponents, 1);
+            stoch_rhs_diff = zeros(nComponents, 1);
+            for n=1:size(beta,2)  % noise components (number of Wiener processes)
                 %terms for stoch spectral integration
-                stoch_rhs = stochRhs{n}(  phi());
-                stoch_rhs_err = stochRhs{n}(  phi(:,p-1)+d(:, p-1) );
+                stoch_rhs = stochRhs{n}(phi);
+                stoch_rhs_err = stochRhs{n}( phi(:,p-1)+d(:, p-1) );
                 stoch_rhs_prev = stoch_rhs(:,p-1);
                 countRhsEvaluations = countRhsEvaluations + 2;
                 
-                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0(n)*(S(p-1,:)*stoch_rhs')';
-                if (m>1)
+                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0*(S(p-1,:)*stoch_rhs')';
+                if (nBridgeTerms>1)
                     % loop over expansion terms: sum_1^m {xi_k * Q_k}
                     % include random variables xi as in the Karhunen-Loeve expansion
-                    Q = zeros(order,size(quadMatK_c, 2));
-                    for l=1:m-1
-                        Q = Q + quadMatK_c(p-1,:, l).*xi(:,l,i);
-                    end
+                    %Q = zeros(nComponents,size(quadMatK_c, 2));
+                    %for l=1:nBridgeTerms-1
+                    %    Q = Q + quadMatK_c(p-1,:, l).*xi(:,l,i);
+                    %end
                     
-                    Q= sqrt(2/deltaT)*Q;
-                    for y=1:order
-                    stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
+                    %C_t = cos(pi/deltaT * (t_currInt-t_currInt(1))' * (1:nBridgeTerms-1));
+
+                    %Q= sqrt(2/deltaT)*Q;
+                    for y=1:nComponents  % solution components
+                        %stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
+                        %stoch_rhs_integrate_bm(y) = 0;
+                        for l=1:nBridgeTerms-1
+                            stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
+                                (quadMatK_c(p-1,:, l)*stoch_rhs(y,:)')'.*xi(y,l,i);
+                             % stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
+                             %    (S(p-1,:)*(C_t(p-1,l)*stoch_rhs(y,:)'))'.*xi(y,l,i);
+                        end
+                        % %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT); %
+                        % % is normalization needed here, or is xi  normalized
+                        % % already?
+                        %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm_all(y,p-1);
                     end
-                    dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
+                    % dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
+                    % this needs t-t_left, so t_currInt(p-1)-t_currInt(1)
+                    dbBridge = dbrownianBridge(deltaT, t_currInt(p-1)-t_currInt(1), xi(:,:,i));
+                    %stoch_rhs_integrate_bm(y) = S(p-1,:) * (dbrownianBridge(deltaT, t_currInt-t_currInt(1), xi(:,:,i)) .* stoch_rhs)';
                 else
-                    stoch_rhs_integrate_bm = zeros(order,1);
+                    stoch_rhs_integrate_bm = zeros(nComponents,1);
+                    dbBridge = zeros(nComponents,1);
                 end
                 countRhsEvaluations = countRhsEvaluations + 1;
                 
-                stoch_rhs_diff = stoch_rhs_diff + (db0(n) + dbBridge(n))*(stoch_rhs_err - stoch_rhs_prev);
+                stoch_rhs_diff = stoch_rhs_diff + (db0 + dbBridge)*(stoch_rhs_err - stoch_rhs_prev);
             end %end loop system's order
             
             %correction scheme
@@ -255,16 +247,21 @@ for i=1:intervals
         %solution update
         phi = phi + d;
         
-        correctionNorm = norm(d);
-        
+        correctionNorm = norm(d(:));
+        correctionNorms(i,j) = correctionNorm;
+
         if (correctionNorm < tol)
             break;
         end
         
     end %iterations
+    % if correctionNorm > tol
+    %     correctionNorm;
+    % end
     y0 = phi(:,end);
     sol(:,int_begin:int_end) = phi;
-    d = zeros(order, points);
+    solAtTimesteps(:,i+1) = phi(end);
+    d = zeros(nComponents, points);
     t_begin = t_currInt(end);
     
 end %intervals

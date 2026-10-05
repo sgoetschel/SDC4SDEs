@@ -1,5 +1,5 @@
 %% spectral integration matrix
-%computation of teh spectral integration matrix
+%computation of the spectral integration matrix
 
 function [ S ] = spectral_matrix( t, nodes)
 

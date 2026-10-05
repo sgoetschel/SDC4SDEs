@@ -2,7 +2,7 @@
 % using the implicit Euler-Maruyama scheme (difussive term) and explicit scheme for drift
 % term
 
-function [ sol, countRhsEvaluations ] = SDC_SDE_BB_impl( parameters, initial, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, order, xi_l, strInit, m, tol, J)
+function [ sol, countRhsEvaluations ] = SDC_SDE_BB_impl( parameters, initial, S, quadMatK_c, t ,deltaT, nodes , beta, rhs_eval, stochRhs, eta, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol, J)
 
 col_points = parameters(1);
 intervals = parameters(2);
@@ -19,8 +19,8 @@ else
 end
 
 % initial values needed for SDC method
-d = zeros(order, points);
-sol = zeros(order, (points-1)*intervals+1);
+d = zeros(nComponents, points);
+sol = zeros(nComponents, (points-1)*intervals+1);
 
 % initial value of SDE
 y0 = initial;
@@ -46,15 +46,15 @@ for i=1:intervals
     
     %choose the different possible initializations
     if strcmp(strInit, 'constInit')
-        phi = zeros(order, points);
-        for n=1:order
+        phi = zeros(nComponents, points);
+        for n=1:nComponents
             phi(n, :) = ones(1,points)*y0(n);
         end
         
         if(m>1)
             dbBridge = dbrownianBridge(deltaT, 0, xi);
         else
-            dbBridge = zeros(order,1);
+            dbBridge = zeros(nComponents,1);
         end
         %Brownian bridge
         countRhsEvaluations = countRhsEvaluations + 1;
@@ -74,12 +74,12 @@ for i=1:intervals
             if(m>1)
                 dbBridge = dbrownianBridge(deltaT, t_currInt(k-1), xi);
             else
-                dbBridge = zeros(order,1);
+                dbBridge = zeros(nComponents,1);
             end
             %Brownian bridge
             countRhsEvaluations = countRhsEvaluations + 1;
             %stoch part
-            stoch_part = zeros(order,1);
+            stoch_part = zeros(nComponents,1);
             for n=1:size(beta,2)
                 stoch_part = stoch_part + stochRhs{n}(phi(:,k-1)).*(db0(n) + dbBridge(n));
                 %rhs stoch fct evals
@@ -101,7 +101,7 @@ for i=1:intervals
         countRhsEvaluations = countRhsEvaluations + 1;
         
         %stoch part
-        stoch_part = zeros(order,1);
+        stoch_part = zeros(nComponents,1);
         for n=1:size(beta,2)
             stoch_part = stoch_part + stochRhs{n}(phi(:,1))*deltaW(n,i);
             %rhs_stoch fct evals
@@ -139,7 +139,7 @@ for i=1:intervals
         if(m>1)
             dbBridge = dbrownianBridge(deltaT, 0, xi);
         else
-            dbBridge = zeros(order,1);
+            dbBridge = zeros(nComponents,1);
         end
         %Brownian bridge
         countRhsEvaluations = countRhsEvaluations + 1;
@@ -152,7 +152,7 @@ for i=1:intervals
         countRhsEvaluations = countRhsEvaluations + 1;
         
         %stoch part
-        stoch_part = zeros(order,1);
+        stoch_part = zeros(nComponents,1);
         for n=1:size(beta,2)
             stoch_part = stoch_part + stochRhs{n}(phi(:,1))*deltaW(n,i);
             %rhs_stoch fct evals
@@ -169,7 +169,7 @@ for i=1:intervals
         if(m>1)
             dbBridge = dbrownianBridge(deltaT, 0, xi);
         else
-            dbBridge = zeros(order,1);
+            dbBridge = zeros(nComponents,1);
         end
         %Brownian bridge
         countRhsEvaluations = countRhsEvaluations + 1;
@@ -192,10 +192,10 @@ for i=1:intervals
             countRhsEvaluations = countRhsEvaluations + 2;
             
             %stoch part
-            stoch_rhs_integrate_b0 = zeros(order, 1);
-            stoch_rhs_integrate_bm = zeros(order, 1);
-            stoch_rhs_diff = zeros(order, 1);
-            Jac_x = zeros(order, 1);
+            stoch_rhs_integrate_b0 = zeros(nComponents, 1);
+            stoch_rhs_integrate_bm = zeros(nComponents, 1);
+            stoch_rhs_diff = zeros(nComponents, 1);
+            Jac_x = zeros(nComponents, 1);
             for n=1:size(beta,2)
                 %terms for stoch spectral integration
                 stoch_rhs = stochRhs{n}(  phi());
@@ -217,7 +217,7 @@ for i=1:intervals
                     
                     dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi);
                 else
-                    stoch_rhs_integrate_bm = zeros(order,1);
+                    stoch_rhs_integrate_bm = zeros(nComponents,1);
                 end
                 countRhsEvaluations = countRhsEvaluations + 1;
                 
@@ -240,10 +240,10 @@ for i=1:intervals
             while abs(d_delta)>1e-15 && niter < 10
                 
                 %stoch part
-                stoch_rhs_integrate_b0 = zeros(order, 1);
-                stoch_rhs_integrate_bm = zeros(order, 1);
-                stoch_rhs_diff = zeros(order, 1);
-                Jac_x = zeros(order, 1);
+                stoch_rhs_integrate_b0 = zeros(nComponents, 1);
+                stoch_rhs_integrate_bm = zeros(nComponents, 1);
+                stoch_rhs_diff = zeros(nComponents, 1);
+                Jac_x = zeros(nComponents, 1);
                 for n=1:size(beta,2)
                     %terms for stoch spectral integration
                     stoch_rhs = stochRhs{n}(  phi());
@@ -255,7 +255,7 @@ for i=1:intervals
                     if (m>1)
                         stoch_rhs_integrate_bm = (Q*stoch_rhs')';
                     else
-                        stoch_rhs_integrate_bm = zeros(order,1);
+                        stoch_rhs_integrate_bm = zeros(nComponents,1);
                     end
                     stoch_rhs_diff = stoch_rhs_diff + (db0(n) + dbBridge(n))*(stoch_rhs_err - stoch_rhs_prev);
                     countRhsEvaluations = countRhsEvaluations + 4;
@@ -292,7 +292,7 @@ for i=1:intervals
     end %iterations
     y0 = phi(:,end);
     sol(:,int_begin:int_end) = phi;
-    d = zeros(order, points);
+    d = zeros(nComponents, points);
     t_begin = t_currInt(end);
     
 end %intervals

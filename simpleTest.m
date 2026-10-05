@@ -9,10 +9,10 @@ warning('off','MATLAB:odearguments:RelTolIncrease');
 dt = 1; % one timestep
 T  = dt;
 
-nRealizations   = 20000;
+nRealizations   = 2000;
 nRealizationsToPlot = 10;
 plotModulus = nRealizations/nRealizationsToPlot;
-nBridgeTermsMax = 25;
+nBridgeTermsMax = 100;
 
 y0 = 0.5; % initial value
 
@@ -93,11 +93,16 @@ solAtT = zeros(nRealizations,nBridgeTermsMax);
 means = zeros(nBridgeTermsMax,1);
 vars  = zeros(nBridgeTermsMax,1);
 
-options = odeset('RelTol',1e-15, 'AbsTol',1e-15);
+% options = odeset('RelTol',1e-15, 'AbsTol',1e-15);
 
-%bridgeRange = 1:5:nBridgeTermsMax;
-bridgeRange = 1:8;
+bridgeRange = 1:5:nBridgeTermsMax;
 for b = bridgeRange
+
+   options = odeset( ...
+    'RelTol', 1e-10, ...
+    'AbsTol', 1e-12, ...
+    'MaxStep', T/(20*b));
+
    for r = 1:nRealizations
       xi = xiComplete(r,1:b);
       % how to fix the endpoint of the Wiener process here? 

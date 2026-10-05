@@ -1,6 +1,7 @@
 %% Karhunen-Loève expansion - Browninan bridge
 % by Lisa Fischer
-%the first expansion term is not included here!
+%the first expansion term is not included here! (isn't it, though?)
+% this is a bridge from 0 to eta
 function [bm] = brownianBridge(eta, deltaT , t, xi)
 
 sum = 0;

@@ -6,12 +6,12 @@ function [ sol, countRhsEvaluations, time ] = EulerMaruyama( initial, deltaT, t_
 
 t = t_begin;
 intervals = round((t_end-t_begin)/deltaT);
-time = zeros(1,intervals);
+time = zeros(1,intervals+1);
 time(1) = t_begin;
 
 % initial value of ODE
 phi= initial;
-sol = zeros(order,intervals);
+sol = zeros(order,intervals+1);
 sol(:,1) = initial;
 
 i=1;
