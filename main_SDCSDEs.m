@@ -1,6 +1,7 @@
-%% preperation for applying the chosen method
-% generates data files
-% by Lisa Fischer
+%% main driver routing
+% performs preperations for applying the chosen method
+% and collects data/writes data files
+% by Lisa Fischer, Sebastian Goetschel
 function [] = main_SDCSDEs(d, sde_solver, nodes, strInit, colpoints, maxIter, steps, NNfinest, realIter, mBB, plot_Sol, plot_Error, useSBB)
 
 fprintf('START PROGRAM using the solver: %s \n', sde_solver)
@@ -8,8 +9,7 @@ fprintf('START PROGRAM using the solver: %s \n', sde_solver)
 seed = 2348;
 rng(seed)
 
-%%setting
-%time interval & step_size
+% time interval & step_size
 t_begin = 0;
 t_end = 1;
 
@@ -50,8 +50,6 @@ elseif strcmp(d, 'OU')
     sigmaOU  = 0.5;
     lambda = [lambdaOU, muOU];
     beta = sigmaOU;
-    %lambda = -0.5;
-    %beta = 1.0;
     [rhs, stochRhs, J, RhsIto, exact] = problemOU(lambda, beta);
     initial = 0.5;
     nComponents = 1;
@@ -63,16 +61,15 @@ else
     nComponents = 1;
 end
 
-%time grid
+% time grid
 nSteps = length(steps);
 fprintf('finest time grid: %d', NNfinest);
 nRndVar = NNfinest;   % one per finest time step
 eta = cell(1,nComponents);
 xi = cell(1,nComponents);
-%Brownian motion W(t) valid on [0,1] without W(0)
+% Brownian motion W(t) on [t_begin,t_end], without W(t_0)=0 in the variable
 for k=1:nComponents
-    %eta{k} = cumsum(randn(realIter,nRndVar),2).*1./sqrt(nRndVar); % TAKE CARE: only valid for t_end=1!
-    eta{k} = cumsum(randn(realIter,nRndVar),2).*sqrt(t_end)./sqrt(nRndVar); 
+    eta{k} = cumsum(randn(realIter,nRndVar),2).*sqrt(t_end-t_begin)./sqrt(nRndVar); 
 end
 
 %initialization for error output files
@@ -82,8 +79,6 @@ errorL2 = zeros(nComponents,nSteps);
 errorT = zeros(nComponents,nSteps);
 
 totalTime = 0;
-
-%global solRefFinestAll
 
 solRefFinestAll = zeros(nComponents, NNfinest+1, realIter);
 etaFin = zeros(nComponents, NNfinest+1);
@@ -120,67 +115,16 @@ for p=1:length(mBB)
     xiFinest = zeros(nComponents, m-1, NNfinest);
     
     
-    %save output in folder with name of #Karhunen-Loeve expansion terms,
-    %#realizations and finest time grid
+    % save output in folder with name of #Karhunen-Loeve expansion terms,
+    % #realizations and finest time grid
     subfolder = sprintf('data_bb_%d_%d_%d', m, realIter, NNfinest);
     if useSBB == true
       subfolder = sprintf('data_bb_SBB_%d_%d_%d', m, realIter, NNfinest);
     end 
     mkdir(subfolder);
     
-    % if strcmp(d, 'OU') 
-    %   solRefFinestAll = 0;
-    %   fprintf(1, '\n problem: %s \t no ref sol required' , d);
-%    elseif strcmp(d, 'TP3')      
-%      allSolRef = cell(1,length(steps));
-%      for n=1:length(steps)
-%        allSolRef{n} = zeros(order, round((t_end-t_begin)/steps(n))+1, realIter);
-%      end
-%      fprintf(1, '\n problem: %s \t ref sol will be computed on current sample path, not on finest' , d);
-%      
-% %       % check bridge ODE with Matlab solver
-%       for l=1:realIter
-%         stepsFinest = t_end/NNfinest;
-%         for k=1:order
-%           etaMat = eta{k}(1,:);%eta{k}(l,:); %always use one to have all processes go through the same nodes
-%           etaFin(k,:) = [0 etaMat];
-%           etaFinest(k,:) = etaFin(k,1:end)- [0, etaFin(k,1:end-1)];
-%           xiFinest(k,:,:) = xi{k}(l,:,:);
-%         end
-%         etaFinest = sqrt(1/stepsFinest)*etaFinest; % t_end/stepsFinest?
-%         if l==1
-%           fprintf(1, '\n etaFinest= %d' , etaFinest(1,end));
-%         end
-%         k=1;
-%         bM(:,k) = brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest);
-%         for k=2:NNfinest
-%            bM(:,k) =  brownianBridge(etaFinest(:,k+1), stepsFinest , stepsFinest, xiFinest)+bM(:,k-1);
-%         end
-%         bbM(:,:) = [zeros(order,1) bM(:,:)];
-%         y0 = initial;
-%         tsolAppro = t_begin;
-%         solAppro = initial;
-%         for k=1:NNfinest
-%           [tsol, solA] = ode45(@(s,x)SBB_ODE_TP3(s,x, etaFinest(:,k+1), stepsFinest, xiFinest(:,:,k), lambda, beta),[t_begin+(k-1)*stepsFinest t_begin+k*stepsFinest], y0');
-%           y0 = solA(end,:);
-%           tsolAppro = [tsolAppro tsol(end)'];
-%            solAppro = [solAppro solA(end)'];
-%         end
-%         solRefFinestAll(:,:,l) = solAppro;
-% 
-% %         if mod(l,100000) == 0
-% %           figure(10);
-% %           hold on ;
-% %           plot(1:size(etaFinest,2), squeeze(etaFinest(1,:)));
-% %         end
-%       end
-%       sv = squeeze(solRefFinestAll(1,end,:));
-%       mean(sv)
-%       var(sv)
-%       return;
-    % else
     
-    %sol of the smooth Brownian Bridge ODE
+    % sol of the smooth Brownian Bridge ODE
     % on finest time grid
     for l=1:realIter
         stepsFinest = t_end/NNfinest;
@@ -236,7 +180,6 @@ for p=1:length(mBB)
     end
     % end
     
-    
     %loop over all collocation points
     for k=1:length(colpoints)
         
@@ -255,27 +198,8 @@ for p=1:length(mBB)
             intervals = round((t_end-t_begin)/step_size);
             fprintf(1, '\nstep size: %d\t intervals: %d', steps(n), intervals);
             
-            %global solRef
-            % if strcmp(d, 'OU')
-              % solRef = 0;
-%             elseif strcmp(d, 'TP3')
-% 
-% %               if k == 1            
-% %                 etaCurrSteps = zeros(order,intervals+1);
-% %                 for l=1:realIter
-% %                   for o=1:order
-% %                     etaMat = eta{o}(l,:);
-% %                     etaCurrSteps(o,:) = [0 etaMat(NNfinest/intervals:NNfinest/intervals:end)];                   
-% %                   end         
-% %                   allSolRef{n}( :, :, l) = exact(lambda, beta, t_begin, t_end, step_size, initial, etaCurrSteps);
-% %                 end
-% %               end
-%               solRef = zeros(order, intervals+1, realIter);
-% %               solRef(:,:,:) = allSolRef{n}(:,:,:);
-            % else
-              solRef = zeros(nComponents, intervals+1, realIter);
-              solRef(:,:,:) = solRefFinestAll(:,1:NNfinest/intervals:end,:);                
-            % end
+             solRef = zeros(nComponents, intervals+1, realIter);
+             solRef(:,:,:) = solRefFinestAll(:,1:NNfinest/intervals:end,:);                
             
             nameDat = sprintf('%s_%s_%d_%s_%s_%d%d_%d_%d_%d_%d', sde_solver, d, col_points, nodes(1:2), strInit(1:6), t_begin, t_end, realIter, NNfinest, m, max_iter);
             
@@ -300,14 +224,7 @@ for p=1:length(mBB)
             end
         end %for loop step size
         
-        %errW, errStr, errorL2, errorT, errWapp, errStrApp, errorL2app, errorTapp,
-        %compute slope as an indicator for convergence order
-        %does not work if loop over time steps ends before length(step_size)
-%         slopeStrong = (log(errStr(1))-log(errStr(end)))/(log(steps(1))-log(steps(end)));
-%         slopeWeak = (log(errW(1))-log(errW(end)))/(log(steps(1))-log(steps(end)));
-%         slopeL2 = (log(errorL2(1))-log(errorL2(end)))/(log(steps(1))-log(steps(end)));
-%         slopeT = (log(errorT(1))-log(errorT(end)))/(log(steps(1))-log(steps(end)));
-        
+        %compute experimental order of convergence
         eocStr = zeros(size(errStr));
         eocWeak = zeros(size(errW));
         eocT = zeros(size(errorT));
