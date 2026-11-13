@@ -109,7 +109,7 @@ K = KTest-1;   % without the linear part, which is handled separately in the bri
 combinedSol = zeros(nRealizations,nStepsRef+1);
 
 % SDC setup
-col_points = 5;
+col_points = 4;   % as in the paper (SDC-4)
 max_iter = 20;
 nodes = 'lobatto';
 tol = 1e-10;
@@ -180,7 +180,7 @@ for iN = 1:nStepsizes
         parameters = [col_points, N, max_iter, 0, T];
         [Smat, tt, ~] = computeSpecMat(0, T, h, N, col_points, nodes);
         quadMatK_c = quadMatKFun(tt, h, nodes, K);
-        [solSDCfull, countRhsEvaluationsThisRun, correctionNorms, solSDCAtTimesteps] = SDC_SDE_BB_NEW(...
+        [solSDCfull, countRhsEvaluationsThisRun, correctionNorms, solSDCAtTimesteps] = SDC_SDE_BB(...
             parameters, X0, Smat, quadMatK_c, tt, h, nodes, sigma, rhs, stochRhs, ...
             eta0, DeltaW, RhsIto, nComponents, xi_l(r,:,:), strInit, K+1, tol);
         solSDCAtTs(r,:) = solSDCAtTimesteps;
@@ -322,16 +322,20 @@ function xi = localKLcoefficients(dW,h,M)
 %
 % dW contains increments of a fixed fine Brownian path.
 %
-% xi_k =
-% sqrt(2/h) sum_n cos(k*pi*tau_n/h) dW_n
+% xi_k = sqrt(2/h) int_0^h cos(k*pi*tau/h) dW(tau),
+%
+% computed exactly for the piecewise linear interpolant of the path. A left-point sum
+% sqrt(2/h) sum_n cos(k*pi*tau_n/h) dW_n has an error of the size of the fine step, which
+% shows as an error floor of about 1e-6 independent of h in the convergence study.
 
     nSub = length(dW);
 
-    n = (0:nSub-1)';
+    n = (0:nSub)';
 
     k = 1:M;
 
-    C = cos(pi/nSub * n*k);
+    % integrals of cos(k*pi*tau/h) over the fine steps, divided by their length
+    C = diff(sin(pi/nSub * n*k)) * nSub ./ (pi*k);
 
     xi = sqrt(2/h) * (C' * dW');
 

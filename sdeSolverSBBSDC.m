@@ -59,9 +59,9 @@ for l=1:realIter
      %dW approximation
      deltaW = etaCurrSteps(:,2:end)- etaCurrSteps(:,1:end-1);
             
-     %calls SDC_SDE_BB_NEW.m to compute SDC approximation
+     %calls SDC_SDE_BB.m to compute SDC approximation
      tic
-     [solSDC, countRhsEvaluations] = SDC_SDE_BB_NEW(parameters, initialValue, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, order, xi_l, strInit, nBridgeTerms, tol);
+     [solSDC, countRhsEvaluations] = SDC_SDE_BB(parameters, initialValue, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, order, xi_l, strInit, nBridgeTerms, tol);
      elapsedTime = toc;
      compTime = compTime +elapsedTime;
      solsSDC(:,l) =  solSDC(:,end);    
