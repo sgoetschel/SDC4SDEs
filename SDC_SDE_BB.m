@@ -197,7 +197,9 @@ for i=1:intervals
                 stoch_rhs_prev = stoch_rhs(:,p-1);
                 countRhsEvaluations = countRhsEvaluations + 2;
                 
-                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0*(S(p-1,:)*stoch_rhs')';
+                % db0(n), xi(n,:,i) and dbBridge(n) belong to Wiener process n and multiply all solution
+                % components of its diffusion vector stochRhs{n}
+                stoch_rhs_integrate_b0 = stoch_rhs_integrate_b0 + db0(n)*(S(p-1,:)*stoch_rhs')';
                 if (nBridgeTerms>1)
                     % loop over expansion terms: sum_1^m {xi_k * Q_k}
                     % include random variables xi as in the Karhunen-Loeve expansion
@@ -209,19 +211,9 @@ for i=1:intervals
                     %C_t = cos(pi/deltaT * (t_currInt-t_currInt(1))' * (1:nBridgeTerms-1));
 
                     %Q= sqrt(2/deltaT)*Q;
-                    for y=1:nComponents  % solution components
-                        %stoch_rhs_integrate_bm(y) = (Q(y,:)*stoch_rhs(y,:)')';
-                        %stoch_rhs_integrate_bm(y) = 0;
-                        for l=1:nBridgeTerms-1
-                            stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
-                                (quadMatK_c(p-1,:, l)*stoch_rhs(y,:)')'.*xi(y,l,i);
-                             % stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) + ...
-                             %    (S(p-1,:)*(C_t(p-1,l)*stoch_rhs(y,:)'))'.*xi(y,l,i);
-                        end
-                        % %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm(y) * sqrt(2/deltaT); %
-                        % % is normalization needed here, or is xi  normalized
-                        % % already?
-                        %stoch_rhs_integrate_bm(y) = stoch_rhs_integrate_bm_all(y,p-1);
+                    for l=1:nBridgeTerms-1
+                        stoch_rhs_integrate_bm = stoch_rhs_integrate_bm + ...
+                            xi(n,l,i)*(quadMatK_c(p-1,:, l)*stoch_rhs')';
                     end
                     % dbBridge = dbrownianBridge(deltaT, t_currInt(p-1), xi(:,:,i));
                     % this needs t-t_left, so t_currInt(p-1)-t_currInt(1)
@@ -233,7 +225,7 @@ for i=1:intervals
                 end
                 countRhsEvaluations = countRhsEvaluations + 1;
                 
-                stoch_rhs_diff = stoch_rhs_diff + (db0 + dbBridge)*(stoch_rhs_err - stoch_rhs_prev);
+                stoch_rhs_diff = stoch_rhs_diff + (db0(n) + dbBridge(n))*(stoch_rhs_err - stoch_rhs_prev);
             end %end loop system's order
             
             %correction scheme
@@ -260,7 +252,7 @@ for i=1:intervals
     % end
     y0 = phi(:,end);
     sol(:,int_begin:int_end) = phi;
-    solAtTimesteps(:,i+1) = phi(end);
+    solAtTimesteps(:,i+1) = phi(:,end);
     d = zeros(nComponents, points);
     t_begin = t_currInt(end);
     

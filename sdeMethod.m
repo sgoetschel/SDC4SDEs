@@ -27,6 +27,7 @@ if strcmp(sde_solver,'SDC_BB')
         
         compTime = 0;
         solsSDC = zeros(realIter, 1);
+        kept = true(realIter, 1);
         etaCurrSteps = zeros(nComponents, nTime);
         eta0 = zeros(nComponents, nTime);
         xi_l = zeros(nComponents, m-1, intervals);
@@ -46,9 +47,12 @@ if strcmp(sde_solver,'SDC_BB')
                     for ii=1:intervals
                         leftidx = (ii-1)*downsampleFactor+1;
                         rightidx = ii*downsampleFactor;
-                        dW = etaMat(leftidx:rightidx) - [0 etaMat(leftidx:rightidx-1)];
-                        nvec = (0:downsampleFactor-1)';
-                        C = cos(pi/downsampleFactor * nvec * (1:m-1));
+                        dW = etaMat(leftidx+1:rightidx+1) - etaMat(leftidx:rightidx);  % the downsampleFactor increments of step ii
+                        % integrals of cos(j*pi*s/h) over the fine steps, divided by their length: exact for the
+                        % piecewise linear path (a left-point sum leaves an error of the size of the fine step)
+                        % (no diff(): it is a variable in this function)
+                        Sfine = sin(pi/downsampleFactor * (0:downsampleFactor)' * (1:m-1));
+                        C = (Sfine(2:end,:) - Sfine(1:end-1,:)) * downsampleFactor ./ (pi*(1:m-1));
                         xi_l(k,:,ii) = (sqrt(2/(time(ii+1)-time(ii))) * C' * dW')';
 
                         % % debug: reconstruct Brownian motion from KL
@@ -90,12 +94,16 @@ if strcmp(sde_solver,'SDC_BB')
             
             %calls SDC_SDE_BB.m to compute SDC approximation
             tic
-            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB(parameters, initial, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, xi_l, strInit, m, tol);
+            % SDC_SDE_BB expects the coefficients of cos(j*pi*s/h) in dB/dt, which are sqrt(2/h)*xi_j (as in OUBridgeTest.m)
+            [solSDCfull, countRhsEvaluationsThisRun, correctionNorms] = SDC_SDE_BB(parameters, initial, S, quadMatK_c, t,step_size, nodes, beta, rhs, stochRhs, eta0, deltaW, RhsIto, nComponents, sqrt(2/step_size)*xi_l, strInit, m, tol);
             elapsedTime = toc;
             compTime = compTime +elapsedTime;
             countRhsEvaluations = countRhsEvaluations + countRhsEvaluationsThisRun;
-            if min(correctionNorms(:)) > 1e-10 || any(isnan(solSDCfull(:)))
+            % only drop diverged realizations: with a fixed number of sweeps, the corrections need not fall below
+            % 1e-10, and dropping those realizations leaves mostly the ones with small noise at large steps
+            if any(isnan(solSDCfull(:)))
                 skippedRealizations = skippedRealizations + 1;
+                kept(l) = false;
                 continue;
             end
             solSDC =  solSDCfull(:,1:col_points-1:end);
@@ -115,10 +123,12 @@ if strcmp(sde_solver,'SDC_BB')
         
         %calculate expected solution for each time point t
         fprintf('\nskipped realizations: %d', skippedRealizations);
-        sol= sumSol/(realIter-skippedRealizations);
-        solExactRef = sumSolRef/(realIter-skippedRealizations);
+        nKept = realIter-skippedRealizations;
+        sol= sumSol/nKept;
+        solExactRef = sumSolRef/nKept;
         
-        solsRef = squeeze(solRefAll(1,end,:));
+        solsRef = squeeze(solRefAll(1,end,kept));
+        solsSDC = solsSDC(kept);
         fprintf("\n at final time:");
         fprintf("\n mean reference \t mean SDC \t err mean \t var reference \t var SDC \t err var\n");
         fprintf("---------------------------------------------------------------------------------------------------\n");
@@ -130,8 +140,8 @@ if strcmp(sde_solver,'SDC_BB')
         %calculate weak, strong, L2-error and absolute error criterion for SDC method
       
         errWeak = max(abs(sol-solExactRef),[],2);
-        errStrong = (diffSol(:,end)./realIter);
-        errL2 = (diff/realIter).^0.5;
+        errStrong = (diffSol(:,end)./nKept);
+        errL2 = (diff/nKept).^0.5;
         errT = abs(sol(:,end)-solExactRef(:,end));
         
 
